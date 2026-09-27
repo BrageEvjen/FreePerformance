@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using RimWorld;
 using Verse;
@@ -26,6 +28,14 @@ namespace ParallelTick.Optimizations
                           "anywhere on the map are ruled out with a cheap check first, instead of after the expensive " +
                           "reachability and reservation checks. Same result, much shorter work searches in big bases.",
             Patch = Patch,
+            Guarded = () => new MethodBase[]
+            {
+                AccessTools.Method(typeof(WorkGiver_ConstructDeliverResourcesToFrames), nameof(WorkGiver_Scanner.HasJobOnThing)),
+                AccessTools.Method(typeof(WorkGiver_ConstructDeliverResourcesToBlueprints), nameof(WorkGiver_Scanner.HasJobOnThing)),
+                AccessTools.Method(typeof(WorkGiver_ConstructDeliverResources), "ShouldRemoveExistingFloorFirst"),
+                AccessTools.Method(typeof(GenConstruct), nameof(GenConstruct.FirstBlockingThing)),
+            }.Concat(AccessTools.GetDeclaredMethods(typeof(GenConstruct))
+                .Where(m => m.Name == nameof(GenConstruct.CanGetResources_NewTemp) || m.Name == nameof(GenConstruct.CanConstruct))),
             Reset = () => Info.Stats.Reset(),
         };
 

@@ -33,6 +33,10 @@ param(
     [int]$PlayABSeconds = 10,
     # Save the game under this name in bench\data\Saves when the run ends (checks what the mod writes into saves).
     [string]$SaveAs = "",
+    # Start a freshly generated colony (like the dev "Quick test" button) instead of loading a save; needed to test DLC subsets.
+    [switch]$QuickTest,
+    # Active DLCs, comma list (royalty, ideology, biotech, anomaly, odyssey); "none" for Core only.
+    [string]$Dlcs = "royalty,ideology,biotech,anomaly,odyssey",
     # Play mode: save this many screen frames per second (bench\datarames) for comparison videos.
     [double]$Record = 0,
     # Portrait mode: "key=value|key=value" (see PortraitComponent), e.g. "hairs=ShortCut,Recruit|heads=Male_AverageWide".
@@ -73,7 +77,9 @@ Copy-Item (Join-Path $realData "Config\LastPlayedVersion.txt") "$data\Config\" -
 
 # Mod list: Harmony, Core + DLCs, this mod, plus anything passed in -ExtraMods.
 $version = (Get-Content (Join-Path $GameDir "Version.txt") -TotalCount 1).Trim()
-$expansions = "royalty", "ideology", "biotech", "anomaly", "odyssey" | ForEach-Object { "ludeon.rimworld.$_" }
+$expansions = @($Dlcs -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ -and $_ -ne "none" } | ForEach-Object { "ludeon.rimworld.$_" })
+# All DLCs stay "known" even when inactive; the game switches on any installed DLC it hasn't seen before.
+$allExpansions = "royalty", "ideology", "biotech", "anomaly", "odyssey" | ForEach-Object { "ludeon.rimworld.$_" }
 $active = @("brrainz.harmony", "ludeon.rimworld") + $expansions + $ExtraMods + @("brage.paralleltick")
 $li = { param($ids) ($ids | ForEach-Object { "    <li>$_</li>" }) -join "`r`n" }
 @"
@@ -84,7 +90,7 @@ $li = { param($ids) ($ids | ForEach-Object { "    <li>$_</li>" }) -join "`r`n" }
 $(& $li $active)
   </activeMods>
   <knownExpansions>
-$(& $li $expansions)
+$(& $li $allExpansions)
   </knownExpansions>
 </ModsConfigData>
 "@ | Set-Content -Encoding UTF8 "$data\Config\ModsConfig.xml"
@@ -101,7 +107,7 @@ foreach ($k in $set.Keys) {
 $prefs.Save("$data\Config\Prefs.xml")
 
 @"
-save=bench
+save=$(if ($QuickTest) { "@new" } else { "bench" })
 mode=$(if ($Portrait) { "portrait" } elseif ($Play) { "play" } else { "bench" })
 playseconds=$PlaySeconds
 playopts=$($PlayOpts -eq "on")

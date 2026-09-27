@@ -12,7 +12,16 @@ namespace ParallelTick.Bench
             if (launched)
                 return;
             launched = true;
-            LongEventHandler.ExecuteWhenFinished(() => GameDataSaveLoader.LoadGame(BenchConfig.SaveName));
+            // save=@new: a freshly generated colony, the same way the main menu's dev "Quick test" button makes one
+            // (the -quicktest command line fails in 1.6: a Game already exists when the Play scene starts, so no world).
+            if (BenchConfig.SaveName == "@new")
+                LongEventHandler.QueueLongEvent(() =>
+                {
+                    Root_Play.SetupForQuickTestPlay();
+                    RimWorld.PageUtility.InitGameStart();
+                }, "GeneratingMap", true, GameAndMapInitExceptionHandlers.ErrorWhileGeneratingMap);
+            else
+                LongEventHandler.ExecuteWhenFinished(() => GameDataSaveLoader.LoadGame(BenchConfig.SaveName));
         }
 
         // Autosaving mid-measurement would add a multi-second spike and write into the bench folder.

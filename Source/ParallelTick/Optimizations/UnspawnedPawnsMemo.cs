@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
@@ -26,6 +27,7 @@ namespace ParallelTick.Optimizations
             Description = "Finding pawns carried inside things walks every container on the map. The colonist bar and some " +
                           "alerts did that twice in the same update; now the second time reuses the first answer.",
             Patch = Patch,
+            Guarded = () => new MethodBase[] { AccessTools.PropertyGetter(typeof(MapPawns), nameof(MapPawns.AllPawnsUnspawned)) },
             Reset = Reset,
         };
 

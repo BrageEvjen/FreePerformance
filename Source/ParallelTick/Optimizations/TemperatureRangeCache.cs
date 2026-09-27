@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
@@ -23,6 +24,11 @@ namespace ParallelTick.Optimizations
             Description = "Keeps each pawn's comfortable temperature range until their apparel, health, genes, traits or life " +
                           "stage change, instead of recalculating it on nearly every heatstroke, hypothermia and danger check.",
             Patch = Patch,
+            Guarded = () => new MethodBase[]
+            {
+                AccessTools.Method(typeof(GenTemperature), nameof(GenTemperature.ComfortableTemperatureRange), new[] { typeof(Pawn) }),
+            }.Concat(StatGuard.Methods(new[] { StatDefOf.ComfyTemperatureMin, StatDefOf.ComfyTemperatureMax })),
+            BlockReason = () => StatGuard.ForeignParts(StatDefOf.ComfyTemperatureMin) ?? StatGuard.ForeignParts(StatDefOf.ComfyTemperatureMax),
             Reset = Reset,
             Prune = Prune,
         };

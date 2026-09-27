@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using HarmonyLib;
+using Verse;
 
 namespace ParallelTick.Optimizations
 {
@@ -44,6 +46,63 @@ namespace ParallelTick.Optimizations
         /// <summary>Optional extra lines for the benchmark report (e.g. per-stat breakdowns).</summary>
         public Func<IEnumerable<string>> ReportLines = () => Enumerable.Empty<string>();
 
+        /// <summary>
+        /// Game methods whose behaviour this optimization reasons about. If another mod patches any of them, the
+        /// optimization switches itself off and logs which mod; its reasoning may no longer hold, and a cached answer
+        /// could skip (or repeat) the other mod's change. Checked on first use, so patches applied later are seen too.
+        /// </summary>
+        public Func<IEnumerable<MethodBase>> Guarded;
+
+        /// <summary>Optional extra check: a reason to stay off (e.g. another mod overrides a method in a subclass), or null.</summary>
+        public Func<string> BlockReason;
+
+        private bool guardChecked, guardBlocked;
+
+        /// <summary>True when another mod changes something this optimization relies on (see Guarded).</summary>
+        public bool Blocked
+        {
+            get
+            {
+                if (!guardChecked)
+                    CheckGuard();
+                return guardBlocked;
+            }
+        }
+
+        /// <summary>Re-check on the next use (each new or loaded game).</summary>
+        public void ResetGuard() => guardChecked = false;
+
+        private void CheckGuard()
+        {
+            guardChecked = true;
+            guardBlocked = false;
+            var name = Label?.Replace("  (exact)", "") ?? Key;
+            try
+            {
+                foreach (var method in Guarded?.Invoke() ?? Enumerable.Empty<MethodBase>())
+                {
+                    if (method == null)
+                        continue;
+                    var owners = Harmony.GetPatchInfo(method)?.Owners.Where(o => o != ParallelTickMod.Id).Distinct().ToList();
+                    if (owners == null || owners.Count == 0)
+                        continue;
+                    Log.Message($"[Free Performance] {name} stays off: {method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}.");
+                    guardBlocked = true;
+                }
+                var reason = BlockReason?.Invoke();
+                if (reason != null)
+                {
+                    Log.Message($"[Free Performance] {name} stays off: {reason}.");
+                    guardBlocked = true;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Message($"[Free Performance] {name} stays off: could not check other mods' patches ({e.GetType().Name}: {e.Message}).");
+                guardBlocked = true;
+            }
+        }
+
         public Action Reset = () => { };
         public Action<int> Prune = _ => { };
         public readonly OptStats Stats = new OptStats();
@@ -55,10 +114,10 @@ namespace ParallelTick.Optimizations
         public bool Enabled = true;
 
         /// <summary>True when the optimized path should answer (not Off, not Verify, not switched off).</summary>
-        public bool Active => Enabled && Mode == OptMode.On;
+        public bool Active => Enabled && Mode == OptMode.On && !Blocked;
 
         /// <summary>True when the optimized path should run alongside vanilla and compare.</summary>
-        public bool Verifying => Enabled && Mode == OptMode.Verify;
+        public bool Verifying => Enabled && Mode == OptMode.Verify && !Blocked;
 
         public void Apply(Harmony harmony, OptMode mode)
         {

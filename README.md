@@ -175,6 +175,17 @@ Second run: all optimizations active, 0 mismatches (dilation 275k skipped pawn-t
 checks). The only load errors come from the save itself: it was once played with FPS+/RimThreaded, whose game components
 are still in it.
 
+**Without DLCs**: a freshly generated Core-only colony (`-QuickTest -Dlcs none`, the same path as the main menu's dev
+"Quick test" button; the `-quicktest` command line fails in 1.6) ran 60 s at Superfast with 0 errors and 0 warnings, and a
+5000-tick verify run showed 0 mismatches in every optimization (dilation 232k skipped pawn-ticks, hediffplan 339k,
+contentsskip 402k).
+
+**Guards for every optimization**: each optimization lists the game methods it reasons about (`Optimization.Guarded`,
+plus an optional `BlockReason`); if another mod patches one of them, `Active`/`Verifying` turn false and a line starting
+with `[Free Performance]` names the mod. Besides reasoning that may no longer hold, this prevents a cached answer from
+skipping or repeating another mod's postfix. The stat caches also leave alone any stat whose worker or parts come from
+another mod, and the merge index stays off if a mod's Thing subclass has its own `CanStackWith`.
+
 **Save files**: the mod's game components are taken out of the component list while a game is saved and put back after
 (the game recreates missing ones on load), so a save written with the mod has no trace of it except the mod list in the
 header. It can be added to or removed from a running save. Checked with `-SaveAs` (saves at the end of a run).

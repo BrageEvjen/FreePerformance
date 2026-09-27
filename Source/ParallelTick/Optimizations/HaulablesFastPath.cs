@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using HarmonyLib;
@@ -31,6 +32,13 @@ namespace ParallelTick.Optimizations
                           "are no longer scanned in a list where they are always skipped, and a storage cell is only " +
                           "re-checked once per tick instead of up to 4 times. Same result.",
             Patch = Patch,
+            Guarded = () => new MethodBase[]
+            {
+                AccessTools.Method(typeof(StoreUtility), nameof(StoreUtility.TryFindBestBetterNonSlotGroupStorageFor)),
+                AccessTools.Method(typeof(ListerHaulables), "CellsCheckTick"),
+                AccessTools.Method(typeof(ListerHaulables), nameof(ListerHaulables.RecalcAllInCell)),
+                AccessTools.PropertyGetter(typeof(HaulDestinationManager), nameof(HaulDestinationManager.AllHaulDestinationsListInPriorityOrder)),
+            },
             Reset = Reset,
             ReportLines = Report,
         };

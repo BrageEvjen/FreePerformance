@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
@@ -27,6 +28,13 @@ namespace ParallelTick.Optimizations
             Description = "When looking for stacks to merge, only items of the same type in the stockpile are checked, " +
                           "instead of every stored item for every partial stack. Same result.",
             Patch = Patch,
+            // Only same-def things are looked at because every CanStackWith in the game requires the same def.
+            Guarded = () => new MethodBase[] { AccessTools.Method(typeof(WorkGiver_Merge), nameof(WorkGiver_Merge.JobOnThing)) }
+                .Concat(new[] { typeof(Thing) }.Concat(typeof(Thing).AllSubclasses())
+                    .Select(t => AccessTools.DeclaredMethod(t, nameof(Thing.CanStackWith)))),
+            BlockReason = () => typeof(Thing).AllSubclasses()
+                .Where(t => t.Assembly != typeof(Thing).Assembly && AccessTools.DeclaredMethod(t, nameof(Thing.CanStackWith)) != null)
+                .Select(t => $"{t.FullName} ({t.Assembly.GetName().Name}) has its own CanStackWith").FirstOrDefault(),
             Reset = Reset,
         };
 

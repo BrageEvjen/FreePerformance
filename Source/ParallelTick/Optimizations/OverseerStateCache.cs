@@ -1,3 +1,4 @@
+using System.Reflection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,6 +31,13 @@ namespace ParallelTick.Optimizations
             Description = "Mechs check every tick whether their mechanitor still controls them. This remembers the answer " +
                           "until the mech's relations or the mechanitor's list of mechs actually change.",
             Patch = Patch,
+            Guarded = () => new MethodBase[]
+            {
+                AccessTools.PropertyGetter(typeof(CompOverseerSubject), nameof(CompOverseerSubject.State)),
+                AccessTools.Method(typeof(CompOverseerSubject), nameof(CompOverseerSubject.CompTick)),
+                AccessTools.Method(typeof(Pawn_RelationsTracker), nameof(Pawn_RelationsTracker.GetFirstDirectRelationPawn)),
+                AccessTools.PropertyGetter(typeof(Pawn_MechanitorTracker), nameof(Pawn_MechanitorTracker.ControlledPawns)),
+            },
             Reset = Reset,
             Prune = Prune,
             ReportLines = Report,

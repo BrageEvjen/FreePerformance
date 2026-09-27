@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection.Emit;
@@ -25,6 +26,7 @@ namespace ParallelTick.Optimizations
             Description = "Plants' wind sway is sent to the graphics card once per drawn frame instead of once per game tick. " +
                           "Only the last value before drawing is ever visible, so it looks the same.",
             Patch = Patch,
+            Guarded = () => new MethodBase[] { AccessTools.Method(typeof(WindManager), nameof(WindManager.WindManagerTick)) },
             Reset = Reset,
             ReportLines = Report,
         };

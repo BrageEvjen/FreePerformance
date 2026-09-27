@@ -1,3 +1,4 @@
+using System.Reflection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +26,14 @@ namespace ParallelTick.Optimizations
             Description = "A few alerts search every pawn on the map, including ones carried or in containers, for babies, " +
                           "ghouls, starving animals or cube withdrawal. When no such pawn exists anywhere the search is skipped.",
             Patch = Patch,
+            Guarded = () => new MethodBase[]
+            {
+                AccessTools.Method(typeof(Alert_LowBabyFood), "LowBabyFoodNutrition"),
+                AccessTools.Method(typeof(Alert_AbandonedBaby), "AbandonedBabies"),
+                AccessTools.PropertyGetter(typeof(Alert_CubeWithdrawal), "Withdrawal"),
+                AccessTools.PropertyGetter(typeof(Alert_GhoulHypothermia), "HypothermiaDangerGhouls"),
+                AccessTools.PropertyGetter(typeof(Alert_StarvationAnimals), "StarvingAnimals"),
+            },
             Reset = () => Info.Stats.Reset(),
             ReportLines = Report,
         };

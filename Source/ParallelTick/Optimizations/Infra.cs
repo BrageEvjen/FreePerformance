@@ -7,6 +7,42 @@ using Verse;
 
 namespace ParallelTick.Optimizations
 {
+    /// <summary>What the stat caches rely on: the stat system's own methods, and stats built only from the game's own parts.</summary>
+    public static class StatGuard
+    {
+        /// <summary>
+        /// The stat pipeline (GetStatValue -> StatWorker.GetValue -> GetValueUnfinalized / FinalizeValue), including
+        /// the given stats' own worker overrides. A patch on any of them can add inputs a cache doesn't track.
+        /// </summary>
+        public static IEnumerable<System.Reflection.MethodBase> Methods(IEnumerable<RimWorld.StatDef> stats)
+        {
+            yield return AccessTools.Method(typeof(RimWorld.StatExtension), nameof(RimWorld.StatExtension.GetStatValue));
+            string[] names = { "GetValue", "GetValueUnfinalized", "FinalizeValue", "GetBaseValueFor" };
+            foreach (var m in AccessTools.GetDeclaredMethods(typeof(RimWorld.StatWorker)).Where(m => names.Contains(m.Name)))
+                yield return m;
+            foreach (var stat in stats)
+            {
+                var type = stat?.Worker?.GetType();
+                if (type == null || type == typeof(RimWorld.StatWorker))
+                    continue;
+                foreach (var m in AccessTools.GetDeclaredMethods(type).Where(m => names.Contains(m.Name)))
+                    yield return m;
+            }
+        }
+
+        /// <summary>Why a stat can't be cached (its worker or a part comes from another mod, with inputs we can't see), or null.</summary>
+        public static string ForeignParts(RimWorld.StatDef stat)
+        {
+            if (stat == null)
+                return null;
+            var vanilla = typeof(RimWorld.StatWorker).Assembly;
+            if (stat.workerClass != null && stat.workerClass.Assembly != vanilla)
+                return $"{stat.defName} uses {stat.workerClass.FullName}";
+            var part = stat.parts?.FirstOrDefault(p => p != null && p.GetType().Assembly != vanilla);
+            return part == null ? null : $"{stat.defName} has part {part.GetType().FullName}";
+        }
+    }
+
     /// <summary>
     /// Transpiler helper: rewrites a method only when it has exactly as many matching instructions as the unmodified
     /// game. Otherwise another mod has probably changed that method, so it is left untouched and the optimization's

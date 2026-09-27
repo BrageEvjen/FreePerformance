@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using RimWorld;
 using Verse;
@@ -20,6 +22,12 @@ namespace ParallelTick.Optimizations
             Description = "Every mood recalculation searched the map for a nearby instrument being played. If no instrument " +
                           "of that kind is being played anywhere on the map, the answer is known without searching.",
             Patch = Patch,
+            Guarded = () => new MethodBase[]
+            {
+                AccessTools.Method(typeof(ThoughtWorker_MusicalInstrumentListeningBase), "CurrentStateInternal"),
+                AccessTools.PropertyGetter(typeof(ThoughtWorker_MusicalInstrumentListeningBase), "InstrumentDef"),
+            }.Concat(typeof(ThoughtWorker_MusicalInstrumentListeningBase).AllSubclasses()
+                .Select(t => AccessTools.DeclaredMethod(t, "CurrentStateInternal"))),
             Reset = () => Info.Stats.Reset(),
         };
 

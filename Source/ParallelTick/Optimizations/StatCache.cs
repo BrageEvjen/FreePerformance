@@ -25,6 +25,7 @@ namespace ParallelTick.Optimizations
                           "genes, traits or life stage change, and furniture stats like comfort and bed rest, instead of " +
                           "recalculating them several times a second.",
             Patch = Patch,
+            Guarded = () => StatGuard.Methods(cachedStats),
             Reset = Reset,
             Prune = Prune,
             ReportLines = ReportLines,
@@ -69,6 +70,7 @@ namespace ParallelTick.Optimizations
 
         // Indexed by StatDef.index, so the check for "is this stat cached at all" costs one array read.
         private static bool[] cachedStat = new bool[0];
+        private static readonly List<StatDef> cachedStats = new List<StatDef>();
         private static readonly Dictionary<(Thing, StatDef, bool), Entry> cache = new Dictionary<(Thing, StatDef, bool), Entry>();
 
         private static void Patch(Harmony harmony)
@@ -78,8 +80,17 @@ namespace ParallelTick.Optimizations
             foreach (var name in PawnStatNames.Concat(ThingStatNames))
             {
                 var stat = DefDatabase<StatDef>.GetNamedSilentFail(name);
-                if (stat != null)
-                    cachedStat[stat.index] = true;
+                if (stat == null)
+                    continue;
+                // A worker or part from another mod can depend on anything; such a stat isn't cached.
+                var foreign = StatGuard.ForeignParts(stat);
+                if (foreign != null)
+                {
+                    Log.Message($"[Free Performance] Stat cache leaves {stat.defName} alone: {foreign}.");
+                    continue;
+                }
+                cachedStat[stat.index] = true;
+                cachedStats.Add(stat);
             }
             harmony.Patch(AccessTools.Method(typeof(StatExtension), nameof(StatExtension.GetStatValue)),
                 prefix: new HarmonyMethod(typeof(StatCache), nameof(Prefix)),

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
@@ -21,6 +22,7 @@ namespace ParallelTick.Optimizations
             Description = "Solar panels check the roof over each of their tiles every tick. This remembers the result until " +
                           "a roof on that map actually changes or the panel moves. Gives exactly the same power output.",
             Patch = Patch,
+            Guarded = () => new MethodBase[] { AccessTools.PropertyGetter(typeof(CompPowerPlantSolar), "RoofedPowerOutputFactor") },
             Reset = Reset,
             Prune = Prune,
         };

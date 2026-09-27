@@ -11,7 +11,10 @@ namespace ParallelTick.Optimizations
         {
             PawnVersions.Reset();
             foreach (var opt in OptimizationRegistry.All)
+            {
+                opt.ResetGuard();
                 opt.Reset();
+            }
         }
 
         public override void GameComponentTick()
