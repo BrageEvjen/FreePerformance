@@ -3,7 +3,7 @@
   <name>Free Performance</name>
   <author>brage</author>
   <packageId>brage.paralleltick</packageId>
-  <modVersion>1.0.2</modVersion>
+  <modVersion>1.0.3</modVersion>
   <url>https://github.com/BrageEvjen/FreePerformance</url>
   <supportedVersions>
     <li>1.6</li>
@@ -38,7 +38,7 @@ How it was tested:
 
 Compatibility:
 - Tested together with Performance Optimizer and a set of 50 popular mods.
-- If another mod changes a method an optimization depends on, that optimization switches itself off and says so in the log.
+- If another mod changes a method an optimization depends on, that part runs as vanilla (or the optimization switches itself off) and the mod settings say which mod.
 - Saves no data into your save file, so you can add or remove it at any time.
 
 Each optimization can be switched off under Options > Mod settings.
