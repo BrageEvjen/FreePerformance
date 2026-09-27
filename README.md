@@ -202,8 +202,15 @@ verified as vanilla). Normal mode: 72.6% of pawn ticks skipped, 346k comp ticks 
 no errors. 50 real mods (VEF's CompAbilities on pawns): 0 mismatches, skippable pawn ticks 61% -> 74.6%.
 
 **Known-harmless patches** (`PatchGuard.Harmless`, each read in the other mod's code): Performance Optimizer's "Faster
-GetComp methods replacement" (returns the same comp through a cache) and Minify Everything's `ThingOwner.DoTick` prefix
-(only skips ticking minified things' contents). The settings window shows, under each optimization, why it is off in the
+GetComp methods replacement" (returns the same comp through a cache) and wind transpiler (returns early only when plant
+sway is off, before the loop the sway deferral replaces), and Minify Everything's `ThingOwner.DoTick` prefix (only skips
+ticking minified things' contents). Per optimization (`Optimization.Accepts`, `GuardedAllowPostfixes`): the stat caches
+accept VEF's gear-factor transpiler (gear is tracked) and animal-gene postfix (pawns in VEF's gene table are never
+cached); the mech-control cache accepts other mods' postfixes on `State` (its own postfix runs first, so theirs adjust
+vanilla's value every time, e.g. Fortified Features); the merge index accepts VEF's gourmet meal `CanStackWith` (same def
+required). With the 50-mod list only the blueprint shortcut stays off (VEF and Replace Stuff change construction jobs);
+50-mod verify: 0 mismatches. Measured cost of the guards before these exceptions: bench A/B with 50 mods -3.4% with
+guards vs -11.1% ignoring them (`-NoGuards`, test only). The settings window shows, under each optimization, why it is off in the
 current game.
 
 **Save files**: the mod's game components are taken out of the component list while a game is saved and put back after
