@@ -45,6 +45,8 @@ param(
     [string]$TestComp = "",
     # Another mod's patches (inert | disrupt) on every method the idle-pawn skip reasons about; see BenchTestPatches.
     [string]$TestPatches = "",
+    # Log methods' instructions with every mod's patches applied: "Type:Method;Type:Method" (see BenchComponent.DumpIl).
+    [string]$DumpIl = "",
     # Bench only: ignore other-mod patch guards (measures what they cost; not exact).
     [switch]$NoGuards,
     [int]$ABBlock = 250,
@@ -126,6 +128,7 @@ playabseconds=$PlayABSeconds
 saveas=$SaveAs
 testcomp=$TestComp
 testpatches=$TestPatches
+dumpil=$DumpIl
 noguards=$([bool]$NoGuards)
 record=$([string]::Format([Globalization.CultureInfo]::InvariantCulture, "{0}", $Record))
 warmup=$Warmup

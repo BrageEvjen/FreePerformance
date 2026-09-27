@@ -42,6 +42,9 @@ namespace ParallelTick.Bench
         /// <summary>testpatches=inert|disrupt: another mod's patches on what the idle-pawn skip reasons about (see BenchTestPatches).</summary>
         public static string TestPatches = "";
 
+        /// <summary>dumpil=Type:Method;Type:Method: logs each method's instructions after every mod's patches (to read other mods' transpilers).</summary>
+        public static string DumpIl = "";
+
         /// <summary>noguards=true (bench only): ignore the other-mod patch guards of Optimization.Guarded, to measure what they cost. Not exact.</summary>
         public static bool NoGuards;
 
@@ -95,6 +98,7 @@ namespace ParallelTick.Bench
                     case "noguards": NoGuards = bool.Parse(value); break;
                     case "testcomp": TestComp = value.ToLowerInvariant(); break;
                     case "testpatches": TestPatches = value.ToLowerInvariant(); break;
+                    case "dumpil": DumpIl = value; break;
                     case "record": RecordFps = float.Parse(value, System.Globalization.CultureInfo.InvariantCulture); break;
                     case "warmup": WarmupTicks = int.Parse(value); break;
                     case "ticks": MeasureTicks = int.Parse(value); break;

@@ -252,10 +252,21 @@ vanilla's value every time, e.g. Fortified Features); the merge index accepts VE
 required); the delivery shortcut accepts VEF's work-giver prefix (only ever answers "no job") and no longer guards
 `GenConstruct.CanConstruct` (in the state where it answers early, vanilla returns false whatever CanConstruct says, so
 Replace Stuff's and VEF's patches to it can't matter); pawn bookkeeping accepts Vehicle Framework's `GetSituation`
-postfix (it only changes free world pawns; the fast answers are for spawned pawns). With the 50-mod list nothing stays
+postfix (it only changes free world pawns; the fast answers are for spawned pawns); the wealth memo accepts Big and
+Small's prefix and postfix on `ForceRecount` (they only set a flag that its `Thing.MarketValue` postfix reads to change
+pawns' final value; the base value per def and stuff that is reused is untouched). With the 50-mod list nothing stays
 off any more; 50-mod verify (3000 ticks): 0 mismatches in all 18 verified optimizations. Measured cost of the guards before these exceptions: bench A/B with 50 mods -3.4% with
 guards vs -11.1% ignoring them (`-NoGuards`, test only). The settings window shows, under each optimization, why it is off in the
 current game.
+
+**Heavy mods (1.0.4)**: 12 popular mods that change a lot (Combat Extended or Yayo's Combat 3, Facial Animation, Melee
+Animation, Humanoid Alien Races with NewRatkinPlus, Big and Small, Dubs Bad Hygiene, Pick Up And Haul, Common Sense,
+Alpha Animals, Vanilla Psycasts Expanded, VEF) added to the test save. Verify (1500 ticks, every optimization): 0
+mismatches in all 21 with either combat mod. The idle-pawn skip applies to 88.6% of pawn ticks with Combat Extended (its
+`VerbsTick` patch makes verbs run as vanilla) and 90.4% with Yayo's (vanilla save: 89.8%); only the wealth memo stayed off
+(Big and Small, now accepted). Bench A/B of all default optimizations with the Combat Extended list: -8.5% +/- 3.0%
+(18 of 20 pairs; off 20.0 ms, on 18.4 ms per tick; vanilla save -13.3%, off 17.2 ms), so the mods add about 3 ms per tick
+of their own and the mod still takes 1.7 ms off.
 
 **Save files**: the mod's game components are taken out of the component list while a game is saved and put back after
 (the game recreates missing ones on load), so a save written with the mod has no trace of it except the mod list in the

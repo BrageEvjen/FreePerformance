@@ -67,8 +67,35 @@ namespace ParallelTick.Bench
             }
         }
 
+        private static bool ilDumped;
+
+        /// <summary>dumpil: each named method's instructions as they run now, with every mod's transpilers applied.</summary>
+        private static void DumpIl()
+        {
+            if (ilDumped || BenchConfig.DumpIl == "")
+                return;
+            ilDumped = true;
+            foreach (var name in BenchConfig.DumpIl.Split(';'))
+            {
+                var method = AccessTools.Method(name.Trim());
+                if (method == null)
+                {
+                    Log.Message($"[Free Performance] dumpil: {name} not found");
+                    continue;
+                }
+                var owners = Harmony.GetPatchInfo(method)?.Owners;
+                var sb = new StringBuilder();
+                sb.AppendLine($"[Free Performance] dumpil {name} (patched by {(owners == null ? "nobody" : string.Join(", ", owners))}):");
+                var i = 0;
+                foreach (var ins in PatchProcessor.GetCurrentInstructions(method))
+                    sb.AppendLine($"  {i++,4} {ins}");
+                Log.Message(sb.ToString());
+            }
+        }
+
         private void Step()
         {
+            DumpIl();
             switch (phase)
             {
                 case Phase.WaitForLoad:

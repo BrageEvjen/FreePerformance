@@ -64,6 +64,14 @@ namespace ParallelTick.Optimizations
         private static bool guardChecked, guardBlocked;
 
         /// <summary>
+        /// Big and Small's prefix and postfix on ForceRecount (read in its code) only set and clear a flag while the
+        /// recount runs; its postfix on Thing.MarketValue then adjusts pawns' final value. Neither touches the base value
+        /// per (def, stuff) that is reused here.
+        /// </summary>
+        private static bool Accepts(HarmonyLib.Patch patch) =>
+            patch?.PatchMethod?.DeclaringType?.FullName == "BigAndSmall.WealthWatcher_ForceRecount_Patch";
+
+        /// <summary>
         /// Another mod patching these could make the base value depend on which thing is being valued (e.g. by stashing
         /// the request's thing in a prefix); then reuse across things would be wrong, so the memo stays off.
         /// CalculableRecipe is not on the list: it takes only the def, and Performance Optimizer caches it per def.
@@ -81,7 +89,7 @@ namespace ParallelTick.Optimizations
             };
             foreach (var m in methods)
             {
-                var owners = PatchGuard.ForeignOwners(m);
+                var owners = PatchGuard.ForeignOwners(m, accepts: Accepts);
                 if (m == null || owners != null && owners.Count > 0)
                 {
                     Info.LogBlocked($"{m?.DeclaringType?.Name}.{m?.Name} is " + (m == null ? "missing" : $"patched by {string.Join(", ", owners)}"));
