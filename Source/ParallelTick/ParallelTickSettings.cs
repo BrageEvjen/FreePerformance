@@ -55,6 +55,15 @@ namespace ParallelTick
             {
                 var on = Settings.IsOn(opt);
                 list.CheckboxLabeled(opt.Label, ref on, opt.Description);
+                // Switched off because another mod changes the same code (known once a game has used it).
+                if (opt.Blocked || opt.BlockedReason != null)
+                {
+                    Text.Font = GameFont.Tiny;
+                    GUI.color = Color.gray;
+                    list.Label("      Off in this game: another mod changes the same code (" + (opt.BlockedReason ?? "see the log") + ").");
+                    GUI.color = Color.white;
+                    Text.Font = GameFont.Small;
+                }
                 if (on == opt.DefaultOn)
                     Settings.Overrides.Remove(opt.Key);
                 else

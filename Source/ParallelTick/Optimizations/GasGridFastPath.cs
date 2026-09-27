@@ -73,7 +73,7 @@ namespace ParallelTick.Optimizations
                 var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
-                    Log.Message($"[Free Performance] Gas grid shortcut stays off: GasGrid.{name} is patched by {string.Join(", ", owners)}.");
+                    Info.LogBlocked($"GasGrid.{name} is patched by {string.Join(", ", owners)}");
                     guardBlocked = true;
                 }
             }

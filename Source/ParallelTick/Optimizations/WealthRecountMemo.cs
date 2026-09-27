@@ -84,8 +84,7 @@ namespace ParallelTick.Optimizations
                 var owners = PatchGuard.ForeignOwners(m);
                 if (m == null || owners != null && owners.Count > 0)
                 {
-                    Log.Message($"[Free Performance] Wealth recount memo stays off: {m?.DeclaringType?.Name}.{m?.Name} is " +
-                                (m == null ? "missing." : $"patched by {string.Join(", ", owners)}."));
+                    Info.LogBlocked($"{m?.DeclaringType?.Name}.{m?.Name} is " + (m == null ? "missing" : $"patched by {string.Join(", ", owners)}"));
                     guardBlocked = true;
                 }
             }

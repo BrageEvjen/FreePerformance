@@ -108,7 +108,7 @@ namespace ParallelTick.Optimizations
                 var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
-                    Log.Message($"[Free Performance] Pawn bookkeeping shortcut stays off: {m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}.");
+                    Info.LogBlocked($"{m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}");
                     guardBlocked = true;
                 }
             }

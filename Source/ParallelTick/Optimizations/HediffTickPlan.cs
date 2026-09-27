@@ -123,7 +123,7 @@ namespace ParallelTick.Optimizations
                     .Select(p => p.owner).Distinct().ToList();
                 if (blocking.Count > 0)
                 {
-                    Log.Message($"[Free Performance] Active-hediff ticking stays off: Pawn_HealthTracker.HealthTick is patched by {string.Join(", ", blocking)}.");
+                    Info.LogBlocked($"Pawn_HealthTracker.HealthTick is patched by {string.Join(", ", blocking)}");
                     guardBlocked = true;
                 }
             }
@@ -141,7 +141,7 @@ namespace ParallelTick.Optimizations
                 var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
-                    Log.Message($"[Free Performance] Active-hediff ticking stays off: {m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}.");
+                    Info.LogBlocked($"{m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}");
                     guardBlocked = true;
                 }
             }

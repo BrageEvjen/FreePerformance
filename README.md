@@ -186,6 +186,20 @@ with `[Free Performance]` names the mod. Besides reasoning that may no longer ho
 skipping or repeating another mod's postfix. The stat caches also leave alone any stat whose worker or parts come from
 another mod, and the merge index stays off if a mod's Thing subclass has its own `CanStackWith`.
 
+**Comps from other mods (1.0.2)**: a user report showed the idle-pawn skip never applied on a 229-mod list, because mods
+like Facial Animation, Melee Animation and TKS Ragdoll put a ticking comp on every pawn and unknown comps made a pawn
+ineligible. Now unknown comps (`CompKind.Foreign`) tick exactly as in vanilla, in order, with vanilla's count-read-once
+loop; every comp after one is re-checked where it stands, and before the rest of the tick is skipped everything the skip
+relies on is re-checked (`IdleAfterComps`). If anything changed, or the comp list itself changed, the rest of `Pawn.Tick`
+runs exactly as vanilla (`VanillaAfterComps`, including the suspended branch). Verify mode mirrors this (a postfix on
+`ThingWithComps.Tick` decides at the same point). Vanilla save: 0 mismatches, 89.7% of pawn ticks skippable; mechs with
+turret guns, shields and carriers now qualify too.
+
+**Known-harmless patches** (`PatchGuard.Harmless`, each read in the other mod's code): Performance Optimizer's "Faster
+GetComp methods replacement" (returns the same comp through a cache) and Minify Everything's `ThingOwner.DoTick` prefix
+(only skips ticking minified things' contents). The settings window shows, under each optimization, why it is off in the
+current game.
+
 **Save files**: the mod's game components are taken out of the component list while a game is saved and put back after
 (the game recreates missing ones on load), so a save written with the mod has no trace of it except the mod list in the
 header. It can be added to or removed from a running save. Checked with `-SaveAs` (saves at the end of a run).

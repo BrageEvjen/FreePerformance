@@ -58,6 +58,16 @@ namespace ParallelTick.Optimizations
 
         private bool guardChecked, guardBlocked;
 
+        /// <summary>Why this optimization is off in the current game (another mod's patch), shown in the settings; null when not.</summary>
+        public string BlockedReason { get; private set; }
+
+        /// <summary>Records and logs why the optimization stays off (the first reason is kept for the settings window).</summary>
+        public void LogBlocked(string reason)
+        {
+            BlockedReason = BlockedReason ?? reason;
+            Log.Message($"[Free Performance] {Label?.Replace("  (exact)", "") ?? Key} stays off: {reason}.");
+        }
+
         /// <summary>True when another mod changes something this optimization relies on (see Guarded).</summary>
         public bool Blocked
         {
@@ -70,13 +80,16 @@ namespace ParallelTick.Optimizations
         }
 
         /// <summary>Re-check on the next use (each new or loaded game).</summary>
-        public void ResetGuard() => guardChecked = false;
+        public void ResetGuard()
+        {
+            guardChecked = false;
+            BlockedReason = null;
+        }
 
         private void CheckGuard()
         {
             guardChecked = true;
             guardBlocked = false;
-            var name = Label?.Replace("  (exact)", "") ?? Key;
             try
             {
                 foreach (var method in Guarded?.Invoke() ?? Enumerable.Empty<MethodBase>())
@@ -86,19 +99,19 @@ namespace ParallelTick.Optimizations
                     var owners = PatchGuard.ForeignOwners(method);
                     if (owners == null || owners.Count == 0)
                         continue;
-                    Log.Message($"[Free Performance] {name} stays off: {method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}.");
+                    LogBlocked($"{method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}");
                     guardBlocked = true;
                 }
                 var reason = BlockReason?.Invoke();
                 if (reason != null)
                 {
-                    Log.Message($"[Free Performance] {name} stays off: {reason}.");
+                    LogBlocked(reason);
                     guardBlocked = true;
                 }
             }
             catch (Exception e)
             {
-                Log.Message($"[Free Performance] {name} stays off: could not check other mods' patches ({e.GetType().Name}: {e.Message}).");
+                LogBlocked($"could not check other mods' patches ({e.GetType().Name}: {e.Message})");
                 guardBlocked = true;
             }
         }

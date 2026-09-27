@@ -11,11 +11,21 @@ namespace ParallelTick.Optimizations
     public static class PatchGuard
     {
         /// <summary>
-        /// Patches that don't change what a method does: Performance Optimizer's "Faster GetComp methods replacement"
-        /// transpiles methods that look up comps so they use its cached lookup, which returns the same comp.
+        /// Patches known not to affect what the optimizations reason about (each one read in the other mod's code):
+        /// - Performance Optimizer's "Faster GetComp methods replacement" transpiles methods that look up comps so they use
+        ///   its cached lookup, which returns the same comp.
+        /// - Minify Everything's ThingOwner.DoTick prefix only skips ticking the contents of minified things (a setting);
+        ///   it never makes a tick do more, and the contents/settlement skips never skip a minified thing's contents.
         /// </summary>
-        public static bool Harmless(Patch patch) =>
-            patch?.PatchMethod?.DeclaringType?.FullName?.StartsWith("PerformanceOptimizer.Optimization_FasterGetCompReplacement") == true;
+        public static bool Harmless(Patch patch)
+        {
+            var method = patch?.PatchMethod;
+            var type = method?.DeclaringType?.FullName;
+            if (type == null)
+                return false;
+            return type.StartsWith("PerformanceOptimizer.Optimization_FasterGetCompReplacement") ||
+                   type == "MinifyEverything.MinifyEverything" && method.Name == "ThingOwnerTickPrefix";
+        }
 
         /// <summary>Owners of patches on the method other than this mod, ignoring harmless ones (see Harmless).</summary>
         public static List<string> ForeignOwners(System.Reflection.MethodBase method)
@@ -25,7 +35,7 @@ namespace ParallelTick.Optimizations
                 return new List<string>();
             var known = info.Prefixes.Concat(info.Postfixes).Concat(info.Transpilers).Concat(info.Finalizers).ToList();
             return info.Owners.Where(o => o != ParallelTickMod.Id)
-                .Where(o => !(known.Any(p => p.owner == o) && known.Where(p => p.owner == o).All(p => info.Transpilers.Contains(p) && Harmless(p))))
+                .Where(o => !(known.Any(p => p.owner == o) && known.Where(p => p.owner == o).All(Harmless)))
                 .Distinct().ToList();
         }
     }

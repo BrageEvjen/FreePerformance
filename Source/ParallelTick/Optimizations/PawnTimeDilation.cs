@@ -162,7 +162,8 @@ namespace ParallelTick.Optimizations
 
         private static void Blocker(string what)
         {
-            blockers.TryGetValue(what, out var n);
+            if (!blockers.TryGetValue(what, out var n))
+                Log.Message($"[Free Performance] Idle-pawn tick skipping leaves out pawns with {what} (when it acts can't be told from outside).");
             blockers[what] = n + 1;
         }
 
@@ -213,7 +214,7 @@ namespace ParallelTick.Optimizations
                 var owners = PatchGuard.ForeignOwners(method);
                 if (owners.Count > 0)
                 {
-                    Log.Message($"[Free Performance] Idle-pawn tick skipping stays off: {method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}.");
+                    Info.LogBlocked($"{method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}");
                     guardBlocked = true;
                 }
             }
