@@ -208,8 +208,11 @@ ticking minified things' contents). Per optimization (`Optimization.Accepts`, `G
 accept VEF's gear-factor transpiler (gear is tracked) and animal-gene postfix (pawns in VEF's gene table are never
 cached); the mech-control cache accepts other mods' postfixes on `State` (its own postfix runs first, so theirs adjust
 vanilla's value every time, e.g. Fortified Features); the merge index accepts VEF's gourmet meal `CanStackWith` (same def
-required). With the 50-mod list only the blueprint shortcut stays off (VEF and Replace Stuff change construction jobs);
-50-mod verify: 0 mismatches. Measured cost of the guards before these exceptions: bench A/B with 50 mods -3.4% with
+required); the delivery shortcut accepts VEF's work-giver prefix (only ever answers "no job") and no longer guards
+`GenConstruct.CanConstruct` (in the state where it answers early, vanilla returns false whatever CanConstruct says, so
+Replace Stuff's and VEF's patches to it can't matter); pawn bookkeeping accepts Vehicle Framework's `GetSituation`
+postfix (it only changes free world pawns; the fast answers are for spawned pawns). With the 50-mod list nothing stays
+off any more; 50-mod verify (3000 ticks): 0 mismatches in all 18 verified optimizations. Measured cost of the guards before these exceptions: bench A/B with 50 mods -3.4% with
 guards vs -11.1% ignoring them (`-NoGuards`, test only). The settings window shows, under each optimization, why it is off in the
 current game.
 
