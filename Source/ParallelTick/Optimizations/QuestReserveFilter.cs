@@ -79,7 +79,7 @@ namespace ParallelTick.Optimizations
             };
             foreach (var m in methods)
             {
-                var owners = m == null ? null : Harmony.GetPatchInfo(m)?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Quest reservation shortcut stays off: {m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}.");

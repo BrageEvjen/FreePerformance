@@ -83,7 +83,7 @@ namespace ParallelTick.Optimizations
                 {
                     if (method == null)
                         continue;
-                    var owners = Harmony.GetPatchInfo(method)?.Owners.Where(o => o != ParallelTickMod.Id).Distinct().ToList();
+                    var owners = PatchGuard.ForeignOwners(method);
                     if (owners == null || owners.Count == 0)
                         continue;
                     Log.Message($"[Free Performance] {name} stays off: {method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}.");

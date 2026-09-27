@@ -63,7 +63,7 @@ namespace ParallelTick.Optimizations
                          AccessTools.PropertyGetter(typeof(PawnRenderNode), nameof(PawnRenderNode.MatPropBlock)),
                      })
             {
-                var owners = m == null ? null : Harmony.GetPatchInfo(m)?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Pawn PreDraw skip stays off: {m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}.");

@@ -115,7 +115,7 @@ namespace ParallelTick.Optimizations
             var healthInfo = Harmony.GetPatchInfo(health);
             if (healthInfo != null)
             {
-                bool Foreign(Patch p) => p.owner != ParallelTickMod.Id;
+                bool Foreign(Patch p) => p.owner != ParallelTickMod.Id && !PatchGuard.Harmless(p);
                 var blocking = healthInfo.Prefixes.Where(Foreign)
                     .Concat(healthInfo.Transpilers.Where(Foreign))
                     .Concat(healthInfo.Finalizers.Where(Foreign))
@@ -138,7 +138,7 @@ namespace ParallelTick.Optimizations
             };
             foreach (var m in methods)
             {
-                var owners = m == null ? null : Harmony.GetPatchInfo(m)?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Active-hediff ticking stays off: {m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}.");

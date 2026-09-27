@@ -61,7 +61,8 @@ if (Get-Process RimWorldWin64 -ErrorAction SilentlyContinue) {
     throw "RimWorld is already running - close it first."
 }
 
-# Link the mod into the game's Mods folder (one-time junction).
+# Link the mod into the game's Mods folder for this run only; removed again when the game exits, so the player's own
+# game (which may be subscribed to the Workshop copy, same packageId) never sees two copies.
 if (Test-Path (Join-Path $GameDir "Mods\FreePerformance")) {
     throw "The release folder is installed (same packageId); run bench\make-release.ps1 -Uninstall first."
 }
@@ -163,6 +164,12 @@ if (-not $proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
 }
 $elapsed = $sw.Elapsed.TotalSeconds
 Write-Host ("Game exited after {0:N0} s" -f $elapsed)
+if ((Get-Item $link -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { cmd /c rmdir "$link" | Out-Null }
+# Which copy of the mod did the game load? (The Workshop copy has the same packageId.)
+$loadedFrom = Select-String -Path $log -Pattern "\[Free Performance\] Loaded from (.*)" | Select-Object -First 1
+if ($loadedFrom -and $loadedFrom.Matches[0].Groups[1].Value -notlike "*$(Split-Path $root -Leaf)*") {
+    Write-Host "WARNING: the game loaded another copy of the mod: $($loadedFrom.Matches[0].Groups[1].Value)"
+}
 
 # CPU used by every other process during the run, in "cores busy on average".
 $cpuAfter = Get-CpuByProcess

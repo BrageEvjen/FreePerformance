@@ -70,7 +70,7 @@ namespace ParallelTick.Optimizations
             foreach (var name in new[] { "Tick", "TryDissipateGases", "TryDiffuseGases", "AnyGasAt", "DensityAt" })
             foreach (var m in AccessTools.GetDeclaredMethods(typeof(GasGrid)).Where(m => m.Name == name))
             {
-                var owners = Harmony.GetPatchInfo(m)?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Gas grid shortcut stays off: GasGrid.{name} is patched by {string.Join(", ", owners)}.");

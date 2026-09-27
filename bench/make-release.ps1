@@ -27,8 +27,7 @@ function Remove-Junction($path) {
 
 if ($Uninstall) {
     Remove-Junction $releaseLink
-    if (-not (Test-Path $devLink)) { New-Item -ItemType Junction -Path $devLink -Target $root | Out-Null }
-    Write-Host "The game now loads the dev folder again."
+    Write-Host "Release folder removed from Mods (the bench script links the dev folder only while it runs)."
     return
 }
 

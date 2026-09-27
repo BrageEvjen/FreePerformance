@@ -7,6 +7,29 @@ using Verse;
 
 namespace ParallelTick.Optimizations
 {
+    /// <summary>Which other mods' Harmony patches on a method matter to an optimization's reasoning.</summary>
+    public static class PatchGuard
+    {
+        /// <summary>
+        /// Patches that don't change what a method does: Performance Optimizer's "Faster GetComp methods replacement"
+        /// transpiles methods that look up comps so they use its cached lookup, which returns the same comp.
+        /// </summary>
+        public static bool Harmless(Patch patch) =>
+            patch?.PatchMethod?.DeclaringType?.FullName?.StartsWith("PerformanceOptimizer.Optimization_FasterGetCompReplacement") == true;
+
+        /// <summary>Owners of patches on the method other than this mod, ignoring harmless ones (see Harmless).</summary>
+        public static List<string> ForeignOwners(System.Reflection.MethodBase method)
+        {
+            var info = method == null ? null : Harmony.GetPatchInfo(method);
+            if (info == null)
+                return new List<string>();
+            var known = info.Prefixes.Concat(info.Postfixes).Concat(info.Transpilers).Concat(info.Finalizers).ToList();
+            return info.Owners.Where(o => o != ParallelTickMod.Id)
+                .Where(o => !(known.Any(p => p.owner == o) && known.Where(p => p.owner == o).All(p => info.Transpilers.Contains(p) && Harmless(p))))
+                .Distinct().ToList();
+        }
+    }
+
     /// <summary>What the stat caches rely on: the stat system's own methods, and stats built only from the game's own parts.</summary>
     public static class StatGuard
     {

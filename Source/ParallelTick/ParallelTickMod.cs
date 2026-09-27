@@ -15,6 +15,8 @@ namespace ParallelTick
         static ParallelTickMod()
         {
             BenchConfig.Load();
+            if (BenchConfig.Active)
+                Log.Message($"[Free Performance] Loaded from {typeof(ParallelTickMod).Assembly.Location}");
             SaveCompat.Patch(Harmony);
             if (!BenchConfig.Active)
             {

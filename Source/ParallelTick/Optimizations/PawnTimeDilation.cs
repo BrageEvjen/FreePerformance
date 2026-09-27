@@ -43,7 +43,11 @@ namespace ParallelTick.Optimizations
             ReportLines = Report,
         };
 
-        private enum CompKind : byte { NoOp, Replay, Attach, Explosive, Platform, Overseer, Dormant, Mechanoid }
+        /// <summary>
+        /// How a comp's CompTick is handled on a skipped tick. Foreign: a comp this mod knows nothing about (usually from
+        /// another mod, e.g. facial animation); it ticks exactly as in vanilla, and whatever it changes is re-checked.
+        /// </summary>
+        private enum CompKind : byte { NoOp, Replay, Attach, Explosive, Platform, Overseer, Dormant, Mechanoid, Foreign }
 
         private sealed class DilState
         {
@@ -59,7 +63,7 @@ namespace ParallelTick.Optimizations
             public int CompCount;
             public ThingComp[] Comps;
             public CompKind[] Kinds;
-            public bool CompsOk;
+            public bool CompsOk, HasForeign;
             public int HediffsCheckedVersion = -1;
             public List<Hediff> HediffsCheckedList;
             public bool HediffsOk;
@@ -69,7 +73,8 @@ namespace ParallelTick.Optimizations
         private static readonly Dictionary<Pawn, DilState> states = new Dictionary<Pawn, DilState>(RefEq<Pawn>.Instance);
         private static readonly Dictionary<Type, CompKind?> compKinds = new Dictionary<Type, CompKind?>();
         private static readonly Dictionary<string, long> forced = new Dictionary<string, long>();
-        private static long offTicks, sleepOffTicks, fullTicks, qualified, movingOffTicks, remainderFallbacks;
+        private static long offTicks, sleepOffTicks, fullTicks, qualified, movingOffTicks, remainderFallbacks, foreignCompTicks, foreignFallbacks;
+        private static readonly Dictionary<string, long> foreignTypes = new Dictionary<string, long>();
         private static readonly long[] offByCategory = new long[4], fullByCategory = new long[4];
         private static readonly string[] CategoryNames = { "animals", "humanlikes", "mechs", "other" };
 
@@ -116,7 +121,8 @@ namespace ParallelTick.Optimizations
             states.Clear();
             forced.Clear();
             blockers.Clear();
-            offTicks = sleepOffTicks = fullTicks = qualified = movingOffTicks = remainderFallbacks = 0;
+            offTicks = sleepOffTicks = fullTicks = qualified = movingOffTicks = remainderFallbacks = foreignCompTicks = foreignFallbacks = 0;
+            foreignTypes.Clear();
             Array.Clear(offByCategory, 0, 4);
             Array.Clear(fullByCategory, 0, 4);
             BloodRainCache.Reset();
@@ -138,6 +144,9 @@ namespace ParallelTick.Optimizations
             yield return $"  pawn ticks: {total:N0}, {(Info.Mode == OptMode.Verify ? "would skip" : "skipped")} {offTicks:N0} ({(total == 0 ? 0 : 100.0 * offTicks / total):F1}%), of which asleep {sleepOffTicks:N0}";
             yield return $"  of which moving (real PatherTick): {movingOffTicks:N0}, rest of the head run as vanilla after moving: {remainderFallbacks:N0}";
             yield return $"  full-tick qualifications: {qualified:N0}";
+            yield return $"  comps from other mods ticked as in vanilla on skipped ticks: {foreignCompTicks:N0}, rest of the tick run as vanilla after them: {foreignFallbacks:N0}";
+            foreach (var kv in foreignTypes.OrderByDescending(kv => kv.Value).Take(10))
+                yield return $"  pawns qualified with comp {kv.Key}: {kv.Value:N0}";
             for (var c = 0; c < 4; c++)
                 if (offByCategory[c] + fullByCategory[c] > 0)
                     yield return $"  {CategoryNames[c]}: {offByCategory[c]:N0} of {offByCategory[c] + fullByCategory[c]:N0} ticks skipped ({100.0 * offByCategory[c] / (offByCategory[c] + fullByCategory[c]):F1}%)";
@@ -201,18 +210,14 @@ namespace ParallelTick.Optimizations
             methods.Add(AccessTools.Method(AccessTools.TypeByName("Verse.PawnStatusEffecters"), "EffectersTick"));
             foreach (var method in methods)
             {
-                var info = method == null ? null : Harmony.GetPatchInfo(method);
-                if (info == null)
-                    continue;
-                var owners = info.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(method);
                 if (owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Idle-pawn tick skipping stays off: {method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}.");
                     guardBlocked = true;
                 }
             }
-            var health = Harmony.GetPatchInfo(AccessTools.Method(typeof(Pawn_HealthTracker), nameof(Pawn_HealthTracker.HealthTick)));
-            var healthOwners = health?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+            var healthOwners = PatchGuard.ForeignOwners(AccessTools.Method(typeof(Pawn_HealthTracker), nameof(Pawn_HealthTracker.HealthTick)));
             if (healthOwners != null && healthOwners.Count > 0)
             {
                 healthTickForeign = true;
@@ -373,41 +378,50 @@ namespace ParallelTick.Optimizations
                 return false;
             var comps = s.Comps;
             for (var i = 0; i < comps.Length; i++)
-            {
-                switch (s.Kinds[i])
-                {
-                    case CompKind.Attach:
-                        if (((CompAttachBase)comps[i]).attachments?.Count > 0)
-                            return false;
-                        break;
-                    case CompKind.Explosive:
-                        var explosive = (CompExplosive)comps[i];
-                        if (explosive.wickStarted || countdownTicksLeft(explosive) > 0)
-                            return false;
-                        break;
-                    case CompKind.Platform:
-                        var platform = (CompHoldingPlatformTarget)comps[i];
-                        if (platform.targetHolder != null || platform.isEscaping)
-                            return false;
-                        break;
-                    case CompKind.Overseer:
-                        if (!OverseerStateCache.TickIsNoOp((CompOverseerSubject)comps[i]))
-                            return false;
-                        break;
-                    // CompCanBeDormant.CompTick acts only while a wake-up is scheduled (and on the 250-tick hash);
-                    // CompMechanoid adds "go dormant if deactivated while active".
-                    case CompKind.Dormant:
-                        if (((CompCanBeDormant)comps[i]).wakeUpOnTick != int.MinValue)
-                            return false;
-                        break;
-                    case CompKind.Mechanoid:
-                        var mech = (CompMechanoid)comps[i];
-                        if (mech.wakeUpOnTick != int.MinValue || mechActive(mech) && mech.Deactivated)
-                            return false;
-                        break;
-                }
-            }
+                if (!CompIdle(comps[i], s.Kinds[i]))
+                    return false;
             return true;
+        }
+
+        /// <summary>True when the comp's CompTick does nothing right now. NoOp comps never act on a skipped tick; Replay and Foreign comps tick anyway.</summary>
+        private static bool CompIdle(ThingComp comp, CompKind kind)
+        {
+            switch (kind)
+            {
+                case CompKind.Attach:
+                    return !(((CompAttachBase)comp).attachments?.Count > 0);
+                case CompKind.Explosive:
+                    var explosive = (CompExplosive)comp;
+                    return !explosive.wickStarted && countdownTicksLeft(explosive) <= 0;
+                case CompKind.Platform:
+                    var platform = (CompHoldingPlatformTarget)comp;
+                    return platform.targetHolder == null && !platform.isEscaping;
+                case CompKind.Overseer:
+                    return OverseerStateCache.TickIsNoOp((CompOverseerSubject)comp);
+                // CompCanBeDormant.CompTick acts only while a wake-up is scheduled (and on the 250-tick hash);
+                // CompMechanoid adds "go dormant if deactivated while active".
+                case CompKind.Dormant:
+                    return ((CompCanBeDormant)comp).wakeUpOnTick == int.MinValue;
+                case CompKind.Mechanoid:
+                    var mech = (CompMechanoid)comp;
+                    return mech.wakeUpOnTick == int.MinValue && !(mechActive(mech) && mech.Deactivated);
+                default:
+                    return true;
+            }
+        }
+
+        /// <summary>
+        /// After comps from other mods ticked: everything the rest of the skip relies on still holds (what StillIdle checks,
+        /// apart from the comps themselves, which have ticked by now).
+        /// </summary>
+        private static bool IdleAfterComps(Pawn pawn, DilState s)
+        {
+            if (pawn.Dead || !pawn.Spawned || pawn.Map != s.Map || pawn.Downed || pawn.mutant != null || PawnVersions.Get(pawn) != s.Version)
+                return false;
+            var mind = pawn.mindState;
+            if (mind == null || mind.anyCloseHostilesRecently || mind.mentalStateHandler.CurState != null)
+                return false;
+            return thingComps(pawn) == s.CompList && s.CompList.Count == s.CompCount && RemainderIdle(pawn, s);
         }
 
         private static bool VerbsIdle(List<Verb> verbs)
@@ -429,11 +443,43 @@ namespace ParallelTick.Optimizations
         {
             var version = PawnVersions.Get(pawn);
 
-            // ThingWithComps.Tick: comps in order, idle ones skipped (checked in StillIdle).
+            // ThingWithComps.Tick: comps in order, with the count read once as vanilla does. Idle ones are skipped (checked
+            // in StillIdle). Comps from other mods tick exactly as in vanilla; they may change anything, so each comp after
+            // one is re-checked where it stands, and so is everything else before the rest of the tick is skipped.
             var comps = s.Comps;
+            var list = s.CompList;
+            var listVersion = s.HasForeign ? ListVersion<ThingComp>.Of(list) : 0;
+            var ranForeign = false;
             for (var i = 0; i < comps.Length; i++)
-                if (s.Kinds[i] == CompKind.Replay)
+            {
+                if (ranForeign && (thingComps(pawn) != list || ListVersion<ThingComp>.Of(list) != listVersion))
+                {
+                    // A comp changed the comp list: vanilla keeps indexing the live list up to the count it read at the
+                    // start; the rest of Pawn.Tick then runs exactly as vanilla.
+                    foreignFallbacks++;
+                    for (var j = i; j < comps.Length; j++)
+                        thingComps(pawn)[j].CompTick();
+                    VanillaAfterComps(pawn);
+                    return;
+                }
+                var kind = s.Kinds[i];
+                if (kind == CompKind.Replay)
                     comps[i].CompTick();
+                else if (kind == CompKind.Foreign)
+                {
+                    foreignCompTicks++;
+                    ranForeign = true;
+                    comps[i].CompTick();
+                }
+                else if (ranForeign && !CompIdle(comps[i], kind))
+                    comps[i].CompTick();
+            }
+            if (ranForeign && (thingComps(pawn) != list || ListVersion<ThingComp>.Of(list) != listVersion || !IdleAfterComps(pawn, s)))
+            {
+                foreignFallbacks++;
+                VanillaAfterComps(pawn);
+                return;
+            }
             // TickRare: not a 250-tick. Suspended: false for a spawned pawn (checked when qualifying).
             if (!PatherIdle(pawn.pather))
             {
@@ -459,6 +505,43 @@ namespace ParallelTick.Optimizations
         private static void VanillaHeadRest(Pawn pawn)
         {
             remainderFallbacks++;
+            HeadRest(pawn);
+        }
+
+        /// <summary>
+        /// Pawn.Tick after ThingWithComps.Tick (IL 0025 to the end), exactly as vanilla: used when a comp from another
+        /// mod changed something the skip relies on.
+        /// </summary>
+        private static void VanillaAfterComps(Pawn pawn)
+        {
+            if (pawn.IsHashIntervalTick(250))
+                pawn.TickRare();
+            var suspended = pawn.Suspended;
+            if (!suspended)
+            {
+                if (pawn.Spawned)
+                    pawn.pather.PatherTick();
+                HeadRest(pawn);
+                pawn.health.HealthTick();
+                if (pawn.Spawned && InvisibilityUtility.IsHiddenFromPlayer(pawn) && Find.Selector.IsSelected(pawn))
+                    Find.Selector.Deselect(pawn);
+                pawn.equipment?.EquipmentTrackerTick();
+                pawn.abilities?.AbilitiesTick();
+                pawn.inventory?.InventoryTrackerTick();
+                pawn.genes?.GeneTrackerTick();
+                if (ModsConfig.AnomalyActive && pawn.Spawned)
+                {
+                    pawn.mutant?.MutantTrackerTick();
+                    BloodRainUtility.BloodRainTick(pawn);
+                }
+            }
+            if (pawn.Spawned)
+                Sounds(pawn);
+            drawer(pawn)?.renderer.EffectersTick(suspended || WorldPawnsUtility.IsWorldPawn(pawn));
+        }
+
+        private static void HeadRest(Pawn pawn)
+        {
             if (pawn.Spawned)
                 pawn.verbTracker.VerbsTick();
             if (pawn.Spawned)
@@ -561,6 +644,7 @@ namespace ParallelTick.Optimizations
                     else
                         s.Kinds[i] = kind.Value;
                 }
+                s.HasForeign = s.CompsOk && s.Kinds.Contains(CompKind.Foreign);
             }
             if (!s.CompsOk)
                 return;
@@ -592,6 +676,14 @@ namespace ParallelTick.Optimizations
                 return;
             s.Eligible = true;
             qualified++;
+            if (s.HasForeign)
+                for (var i = 0; i < s.Kinds.Length; i++)
+                    if (s.Kinds[i] == CompKind.Foreign)
+                    {
+                        var name = s.Comps[i].GetType().Name;
+                        foreignTypes.TryGetValue(name, out var n);
+                        foreignTypes[name] = n + 1;
+                    }
         }
 
         private static int EffecterPairs(Pawn pawn)
@@ -600,7 +692,7 @@ namespace ParallelTick.Optimizations
             return (effecterPairs.GetValue(effecters) as ICollection)?.Count ?? 0;
         }
 
-        /// <summary>How a comp type's CompTick is handled on a skipped tick; null = unknown, the pawn is not eligible.</summary>
+        /// <summary>How a comp type's CompTick is handled on a skipped tick (unknown types tick as in vanilla: Foreign).</summary>
         private static CompKind? KindOf(Type type)
         {
             if (compKinds.TryGetValue(type, out var kind))
@@ -627,7 +719,7 @@ namespace ParallelTick.Optimizations
             else if (declaring == typeof(CompMechanoid))
                 kind = CompKind.Mechanoid;
             else
-                kind = null;
+                kind = CompKind.Foreign;
             compKinds[type] = kind;
             return kind;
         }
@@ -648,6 +740,10 @@ namespace ParallelTick.Optimizations
             private static readonly FieldInfo randSeed = AccessTools.Field(typeof(Rand), "seed");
             private static readonly FieldInfo randIterations = AccessTools.Field(typeof(Rand), "iterations");
             private static int versionAtBegin;
+            // Comps from other mods tick for real on a skipped tick; if they change what the skip relies on, the rest of
+            // the tick runs as vanilla and nothing after the comps is checked.
+            private static bool restSkippable, compsDone;
+            private static int compListVersion;
 
             public static void Reset()
             {
@@ -667,6 +763,9 @@ namespace ParallelTick.Optimizations
                 currentState = states[pawn];
                 patherPredictedIdle = PatherIdle(pawn.pather);
                 versionAtBegin = PawnVersions.Get(pawn);
+                restSkippable = true;
+                compsDone = false;
+                compListVersion = currentState.HasForeign ? ListVersion<ThingComp>.Of(currentState.CompList) : 0;
             }
 
             public static void End(Pawn pawn)
@@ -709,6 +808,8 @@ namespace ParallelTick.Optimizations
                     postfix: new HarmonyMethod(typeof(Verifier), nameof(WorldPawnPostfix)));
                 harmony.Patch(AccessTools.Method(typeof(Pawn), nameof(Pawn.TickRare)),
                     prefix: new HarmonyMethod(typeof(Verifier), nameof(TickRarePrefix)));
+                harmony.Patch(AccessTools.Method(typeof(ThingWithComps), "Tick"),
+                    postfix: new HarmonyMethod(typeof(Verifier), nameof(CompsDonePostfix)));
             }
 
             private static void Note(string what)
@@ -800,6 +901,15 @@ namespace ParallelTick.Optimizations
                     __state = null;
                     if (current == null || OwnerPawn(__instance) != current)
                         return;
+                    if (__instance is ThingComp comp)
+                    {
+                        // After a comp from another mod ticked, a comp is only skipped if it is idle where it stands.
+                        var index = Array.IndexOf(currentState.Comps, comp);
+                        if (index >= 0 && !CompIdle(comp, currentState.Kinds[index]))
+                            return;
+                    }
+                    else if (!restSkippable)
+                        return;
                     // A moving pawn runs the real PatherTick; the systems after it are only skipped if still idle then.
                     if (__instance is Pawn_PathFollower && !patherPredictedIdle)
                         return;
@@ -821,7 +931,7 @@ namespace ParallelTick.Optimizations
                 public static void Prefix(PawnRenderer __instance, out Snapshot __state)
                 {
                     __state = null;
-                    if (current != null && drawer(current)?.renderer == __instance && PawnVersions.Get(current) == versionAtBegin &&
+                    if (current != null && restSkippable && drawer(current)?.renderer == __instance && PawnVersions.Get(current) == versionAtBegin &&
                         current.mindState.mentalStateHandler.CurState == null)
                         __state = Take(current, EffecterPairsList(current));
                 }
@@ -840,7 +950,7 @@ namespace ParallelTick.Optimizations
                 public static void Prefix(Pawn pawn, out Snapshot __state)
                 {
                     __state = null;
-                    if (current != null && pawn == current && PawnVersions.Get(current) == versionAtBegin && pawn.Spawned &&
+                    if (current != null && restSkippable && pawn == current && PawnVersions.Get(current) == versionAtBegin && pawn.Spawned &&
                         !BloodRainCache.Possible(pawn.Map))
                         __state = Take(pawn, pawn.health.hediffSet);
                 }
@@ -854,7 +964,7 @@ namespace ParallelTick.Optimizations
 
             public static void HiddenPostfix(Pawn pawn, bool __result)
             {
-                if (current == null || pawn != current || PawnVersions.Get(current) != versionAtBegin)
+                if (current == null || !compsDone || !restSkippable || pawn != current || PawnVersions.Get(current) != versionAtBegin)
                     return;
                 Note("InvisibilityUtility.IsHiddenFromPlayer");
                 if (__result)
@@ -863,7 +973,7 @@ namespace ParallelTick.Optimizations
 
             public static void SuspendedPostfix(Pawn __instance, bool __result)
             {
-                if (current == null || __instance != current)
+                if (current == null || !compsDone || !restSkippable || __instance != current)
                     return;
                 Note("Pawn.Suspended");
                 if (__result)
@@ -872,11 +982,25 @@ namespace ParallelTick.Optimizations
 
             public static void WorldPawnPostfix(Pawn p, bool __result)
             {
-                if (current == null || p != current)
+                if (current == null || !compsDone || !restSkippable || p != current)
                     return;
                 Note("WorldPawnsUtility.IsWorldPawn");
                 if (__result)
                     Info.Stats.Mismatch(() => $"{current}: world pawn on a predicted off-tick");
+            }
+
+            /// <summary>Right after the comps: what MicroTick decides at the same point.</summary>
+            public static void CompsDonePostfix(ThingWithComps __instance)
+            {
+                if (current == null || __instance != current)
+                    return;
+                compsDone = true;
+                if (!currentState.HasForeign)
+                    return;
+                var list = currentState.CompList;
+                restSkippable = thingComps(current) == list && ListVersion<ThingComp>.Of(list) == compListVersion &&
+                                IdleAfterComps(current, currentState);
+                patherPredictedIdle = PatherIdle(current.pather);
             }
 
             /// <summary>TickRare runs inside Pawn.Tick; a predicted off-tick must never be one.</summary>

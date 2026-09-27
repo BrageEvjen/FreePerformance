@@ -81,7 +81,7 @@ namespace ParallelTick.Optimizations
             };
             foreach (var m in methods)
             {
-                var owners = m == null ? null : Harmony.GetPatchInfo(m)?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(m);
                 if (m == null || owners != null && owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Wealth recount memo stays off: {m?.DeclaringType?.Name}.{m?.Name} is " +

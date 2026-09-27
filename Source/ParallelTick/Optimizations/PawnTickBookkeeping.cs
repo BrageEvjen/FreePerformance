@@ -105,7 +105,7 @@ namespace ParallelTick.Optimizations
                          AccessTools.PropertyGetter(typeof(Gene), nameof(Gene.Active)),
                      })
             {
-                var owners = m == null ? null : Harmony.GetPatchInfo(m)?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Pawn bookkeeping shortcut stays off: {m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}.");

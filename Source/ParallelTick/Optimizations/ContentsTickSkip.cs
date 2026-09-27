@@ -100,8 +100,7 @@ namespace ParallelTick.Optimizations
             };
             foreach (var m in methods)
             {
-                var info = m == null ? null : Harmony.GetPatchInfo(m);
-                var owners = info?.Owners.Where(o => o != ParallelTickMod.Id).ToList();
+                var owners = PatchGuard.ForeignOwners(m);
                 if (owners != null && owners.Count > 0)
                 {
                     Log.Message($"[Free Performance] Idle-contents skipping stays off: {m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}.");
