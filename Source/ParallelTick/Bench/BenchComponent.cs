@@ -220,6 +220,9 @@ namespace ParallelTick.Bench
             else if (BenchConfig.AbTarget == "all" || BenchConfig.AbTarget == "defaults")
                 foreach (var opt in OptimizationRegistry.All)
                     opt.Enabled = on && (BenchConfig.AbTarget == "all" || opt.DefaultOn);
+            else if (BenchConfig.AbTarget.Contains("+"))
+                foreach (var key in BenchConfig.AbTarget.Split('+'))
+                    OptimizationRegistry.Get(key).Enabled = on;
             else
                 OptimizationRegistry.Get(BenchConfig.AbTarget).Enabled = on;
         }

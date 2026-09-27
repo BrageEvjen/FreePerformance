@@ -33,10 +33,17 @@ namespace ParallelTick.Optimizations
                 .Concat(new[] { typeof(Thing) }.Concat(typeof(Thing).AllSubclasses())
                     .Select(t => AccessTools.DeclaredMethod(t, nameof(Thing.CanStackWith)))),
             BlockReason = () => typeof(Thing).AllSubclasses()
-                .Where(t => t.Assembly != typeof(Thing).Assembly && AccessTools.DeclaredMethod(t, nameof(Thing.CanStackWith)) != null)
+                .Where(t => t.Assembly != typeof(Thing).Assembly && AccessTools.DeclaredMethod(t, nameof(Thing.CanStackWith)) != null &&
+                            !SameDefCanStackWith.Contains(t.FullName))
                 .Select(t => $"{t.FullName} ({t.Assembly.GetName().Name}) has its own CanStackWith").FirstOrDefault(),
             Reset = Reset,
         };
+
+        /// <summary>
+        /// Other mods' CanStackWith overrides, read in their code, that also require the same def (so only same-def things
+        /// can merge): VEF's gourmet meals first compare defs and otherwise fall back to ThingWithComps.CanStackWith.
+        /// </summary>
+        private static readonly HashSet<string> SameDefCanStackWith = new HashSet<string> { "VEF.Cooking.GourmetMeal" };
 
         private static bool inWorkSearch;
         private static readonly Dictionary<ISlotGroup, Dictionary<ThingDef, List<Thing>>> index =

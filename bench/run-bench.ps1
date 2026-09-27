@@ -43,6 +43,8 @@ param(
     [string]$Portrait = "",
     # A ticking comp on every pawn race (inert | disrupt), standing in for animation mods; see BenchTestComp.
     [string]$TestComp = "",
+    # Bench only: ignore other-mod patch guards (measures what they cost; not exact).
+    [switch]$NoGuards,
     [int]$ABBlock = 250,
     [string]$Label = "run",
     [string[]]$ExtraMods = @(),
@@ -121,6 +123,7 @@ playab=$PlayAB
 playabseconds=$PlayABSeconds
 saveas=$SaveAs
 testcomp=$TestComp
+noguards=$([bool]$NoGuards)
 record=$([string]::Format([Globalization.CultureInfo]::InvariantCulture, "{0}", $Record))
 warmup=$Warmup
 ticks=$Ticks

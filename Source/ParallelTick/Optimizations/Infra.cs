@@ -16,6 +16,8 @@ namespace ParallelTick.Optimizations
         ///   its cached lookup, which returns the same comp.
         /// - Minify Everything's ThingOwner.DoTick prefix only skips ticking the contents of minified things (a setting);
         ///   it never makes a tick do more, and the contents/settlement skips never skip a minified thing's contents.
+        /// - Performance Optimizer's WindManagerTick transpiler returns early when plant sway is off in the options, before
+        ///   the material loop the sway deferral replaces; with sway on the method runs as vanilla (and is deferred).
         /// </summary>
         public static bool Harmless(Patch patch)
         {
@@ -24,19 +26,62 @@ namespace ParallelTick.Optimizations
             if (type == null)
                 return false;
             return type.StartsWith("PerformanceOptimizer.Optimization_FasterGetCompReplacement") ||
+                   type == "PerformanceOptimizer.Optimization_WindManager_WindManagerTick" ||
                    type == "MinifyEverything.MinifyEverything" && method.Name == "ThingOwnerTickPrefix";
         }
 
-        /// <summary>Owners of patches on the method other than this mod, ignoring harmless ones (see Harmless).</summary>
-        public static List<string> ForeignOwners(System.Reflection.MethodBase method)
+        /// <summary>
+        /// Owners of patches on the method other than this mod, ignoring harmless ones (see Harmless). With
+        /// allowPostfixes, postfixes are ignored too: for a cache whose own postfix runs first (Priority.First), a later
+        /// postfix sees and adjusts the same value it would after vanilla, as long as it doesn't ask whether the
+        /// original ran (__runOriginal).
+        /// </summary>
+        public static List<string> ForeignOwners(System.Reflection.MethodBase method, bool allowPostfixes = false, Func<Patch, bool> accepts = null)
         {
             var info = method == null ? null : Harmony.GetPatchInfo(method);
             if (info == null)
                 return new List<string>();
             var known = info.Prefixes.Concat(info.Postfixes).Concat(info.Transpilers).Concat(info.Finalizers).ToList();
+            bool Ok(Patch p) => Harmless(p) || accepts?.Invoke(p) == true || allowPostfixes && info.Postfixes.Contains(p) &&
+                                p.PatchMethod.GetParameters().All(a => a.Name != "__runOriginal");
             return info.Owners.Where(o => o != ParallelTickMod.Id)
-                .Where(o => !(known.Any(p => p.owner == o) && known.Where(p => p.owner == o).All(Harmless)))
+                .Where(o => !(known.Any(p => p.owner == o) && known.Where(p => p.owner == o).All(Ok)))
                 .Distinct().ToList();
+        }
+    }
+
+    /// <summary>
+    /// Vanilla Expanded Framework's changes to StatWorker.GetValueUnfinalized, read in its code: a transpiler that applies
+    /// stat factors from worn and equipped gear (which pawn stat caches already track), and a postfix that applies
+    /// animal-gene offsets to pawns registered in its own table (WorldComponent_AnimalGenes). The stat caches accept both
+    /// and never cache a pawn that is in that table.
+    /// </summary>
+    public static class VefStats
+    {
+        public static bool Accepts(Patch patch)
+        {
+            var type = patch?.PatchMethod?.DeclaringType?.FullName;
+            return type == "VEF.Apparels.VanillaExpandedFramework_StatWorker_GetValueUnfinalized_Transpiler" ||
+                   type == "VEF.AnimalGenes.VEF_AnimalGenes_StatWorker_GetValueUnfinalized_Patch";
+        }
+
+        private static bool resolved;
+        private static System.Reflection.FieldInfo instanceField, tableField;
+
+        /// <summary>True when VEF adjusts this thing's stats from its animal-gene table (then it must not be cached).</summary>
+        public static bool HasAnimalGenes(object thing)
+        {
+            if (!resolved)
+            {
+                resolved = true;
+                var type = AccessTools.TypeByName("VEF.AnimalGenes.WorldComponent_AnimalGenes");
+                instanceField = type == null ? null : AccessTools.Field(type, "Instance");
+                tableField = type == null ? null : AccessTools.Field(type, "pawnToCompAnimalGenes");
+            }
+            if (instanceField == null || tableField == null)
+                return false;
+            var instance = instanceField.GetValue(null);
+            return instance != null && tableField.GetValue(instance) is System.Collections.IDictionary table && table.Contains(thing);
         }
     }
 

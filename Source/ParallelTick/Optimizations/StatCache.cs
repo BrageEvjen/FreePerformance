@@ -26,6 +26,7 @@ namespace ParallelTick.Optimizations
                           "recalculating them several times a second.",
             Patch = Patch,
             Guarded = () => StatGuard.Methods(cachedStats),
+            Accepts = VefStats.Accepts,
             Reset = Reset,
             Prune = Prune,
             ReportLines = ReportLines,
@@ -116,6 +117,8 @@ namespace ParallelTick.Optimizations
             if (stat == null || stat.index >= cachedStat.Length || !cachedStat[stat.index] || thing == null)
                 return true;
             if (!Info.Active && !Info.Verifying || !UnityData.IsInMainThread || Current.ProgramState != ProgramState.Playing)
+                return true;
+            if (thing is Pawn && VefStats.HasAnimalGenes(thing))
                 return true;
 
             if (Info.Active && TryGetFresh(thing, stat, applyPostProcess, out var entry))

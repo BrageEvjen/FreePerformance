@@ -29,6 +29,7 @@ namespace ParallelTick.Optimizations
                 AccessTools.Method(typeof(GenTemperature), nameof(GenTemperature.ComfortableTemperatureRange), new[] { typeof(Pawn) }),
             }.Concat(StatGuard.Methods(new[] { StatDefOf.ComfyTemperatureMin, StatDefOf.ComfyTemperatureMax })),
             BlockReason = () => StatGuard.ForeignParts(StatDefOf.ComfyTemperatureMin) ?? StatGuard.ForeignParts(StatDefOf.ComfyTemperatureMax),
+            Accepts = VefStats.Accepts,
             Reset = Reset,
             Prune = Prune,
         };
@@ -67,6 +68,9 @@ namespace ParallelTick.Optimizations
             __state = false;
             // Worker threads and non-game contexts (e.g. world generation) always take the vanilla path.
             if (!Info.Active && !Info.Verifying || p == null || !UnityData.IsInMainThread || Current.ProgramState != ProgramState.Playing)
+                return true;
+            // VEF adjusts these pawns' stats from its gene table, which this cache can't watch.
+            if (VefStats.HasAnimalGenes(p))
                 return true;
 
             if (Info.Active && TryGetFresh(p, out var entry))

@@ -53,6 +53,12 @@ namespace ParallelTick.Optimizations
         /// </summary>
         public Func<IEnumerable<MethodBase>> Guarded;
 
+        /// <summary>Like Guarded, but other mods' postfixes are fine (the optimization's own postfix runs first).</summary>
+        public Func<IEnumerable<MethodBase>> GuardedAllowPostfixes;
+
+        /// <summary>Other mods' patches this optimization has been checked against and accepts (see e.g. VefStats).</summary>
+        public Func<HarmonyLib.Patch, bool> Accepts;
+
         /// <summary>Optional extra check: a reason to stay off (e.g. another mod overrides a method in a subclass), or null.</summary>
         public Func<string> BlockReason;
 
@@ -75,7 +81,7 @@ namespace ParallelTick.Optimizations
             {
                 if (!guardChecked)
                     CheckGuard();
-                return guardBlocked;
+                return guardBlocked && !Bench.BenchConfig.NoGuards;
             }
         }
 
@@ -96,8 +102,18 @@ namespace ParallelTick.Optimizations
                 {
                     if (method == null)
                         continue;
-                    var owners = PatchGuard.ForeignOwners(method);
+                    var owners = PatchGuard.ForeignOwners(method, accepts: Accepts);
                     if (owners == null || owners.Count == 0)
+                        continue;
+                    LogBlocked($"{method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}");
+                    guardBlocked = true;
+                }
+                foreach (var method in GuardedAllowPostfixes?.Invoke() ?? Enumerable.Empty<MethodBase>())
+                {
+                    if (method == null)
+                        continue;
+                    var owners = PatchGuard.ForeignOwners(method, allowPostfixes: true, accepts: Accepts);
+                    if (owners.Count == 0)
                         continue;
                     LogBlocked($"{method.DeclaringType?.Name}.{method.Name} is patched by {string.Join(", ", owners)}");
                     guardBlocked = true;
