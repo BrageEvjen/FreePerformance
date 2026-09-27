@@ -1,0 +1,142 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using HarmonyLib;
+using Verse;
+
+namespace ParallelTick.Optimizations
+{
+    /// <summary>
+    /// Transpiler helper: rewrites a method only when it has exactly as many matching instructions as the unmodified
+    /// game. Otherwise another mod has probably changed that method, so it is left untouched and the optimization's
+    /// rewrite is skipped (an info line in the log, not an error).
+    /// </summary>
+    public static class SafeTranspile
+    {
+        public static List<CodeInstruction> Replace(IEnumerable<CodeInstruction> instructions, int expected, string what,
+            Func<CodeInstruction, bool> match, Func<CodeInstruction, IEnumerable<CodeInstruction>> replace)
+        {
+            var list = instructions.ToList();
+            var sites = list.Count(match);
+            if (sites != expected)
+            {
+                Log.Message($"[Free Performance] {what}: found {sites} matching places instead of {expected} " +
+                            "(another mod may have changed this code); left as is.");
+                return list;
+            }
+            var result = new List<CodeInstruction>(list.Count + expected);
+            foreach (var ins in list)
+            {
+                if (match(ins))
+                    result.AddRange(replace(ins));
+                else
+                    result.Add(ins);
+            }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Identity comparer for caches keyed by game objects: Thing.GetHashCode changes when an ID is assigned and
+    /// Pawn.Equals compares defs and IDs, neither of which a cache key should depend on.
+    /// </summary>
+    public sealed class RefEq<T> : IEqualityComparer<T> where T : class
+    {
+        public static readonly RefEq<T> Instance = new RefEq<T>();
+        public bool Equals(T a, T b) => ReferenceEquals(a, b);
+        public int GetHashCode(T o) => RuntimeHelpers.GetHashCode(o);
+    }
+
+    /// <summary>Verify-mode helper: the values of an object's instance fields, to check a call left it unchanged.</summary>
+    public static class ShallowSnapshot
+    {
+        private static readonly Dictionary<System.Type, System.Reflection.FieldInfo[]> fields = new Dictionary<System.Type, System.Reflection.FieldInfo[]>();
+
+        private static System.Reflection.FieldInfo[] FieldsOf(System.Type t)
+        {
+            if (!fields.TryGetValue(t, out var f))
+            {
+                var list = new List<System.Reflection.FieldInfo>();
+                for (var type = t; type != null && type != typeof(object); type = type.BaseType)
+                    foreach (var fi in AccessTools.GetDeclaredFields(type))
+                        if (!fi.IsStatic)
+                            list.Add(fi);
+                fields[t] = f = list.ToArray();
+            }
+            return f;
+        }
+
+        public static object[] Take(object o)
+        {
+            var f = FieldsOf(o.GetType());
+            var values = new object[f.Length * 2];
+            for (var i = 0; i < f.Length; i++)
+            {
+                var v = f[i].GetValue(o);
+                values[2 * i] = v;
+                values[2 * i + 1] = (v as System.Collections.ICollection)?.Count;
+            }
+            return values;
+        }
+
+        /// <summary>Name of the first field that differs (value types and strings by value, objects by reference), or null.</summary>
+        public static string Diff(object o, object[] before, System.Func<string, bool> ignore = null)
+        {
+            var f = FieldsOf(o.GetType());
+            var now = Take(o);
+            for (var i = 0; i < now.Length; i++)
+            {
+                var a = before[i];
+                var b = now[i];
+                var same = a == null || a.GetType().IsValueType || a is string ? Equals(a, b) : ReferenceEquals(a, b);
+                if (!same && (ignore == null || !ignore(f[i / 2].Name)))
+                    return $"{f[i / 2].Name}{(i % 2 == 1 ? ".Count" : "")}: {a} -> {b}";
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether a map (or its world parent) has an active GameCondition_BloodRain, looked up once per map per tick.
+    /// BloodRainUtility.ExposedToBloodRain needs one that has run for more than 2000 ticks, so a condition started later
+    /// in the same tick cannot change the answer, and a removed one only makes the real check run once more.
+    /// </summary>
+    public static class BloodRainCache
+    {
+        private static Verse.Map map;
+        private static int tick = -1;
+        private static bool present;
+
+        public static bool Possible(Verse.Map m)
+        {
+            if (m == null)
+                return true;
+            var now = Verse.Find.TickManager.TicksGame;
+            if (m != map || now != tick)
+            {
+                map = m;
+                tick = now;
+                present = m.gameConditionManager.GetActiveCondition<RimWorld.GameCondition_BloodRain>() != null;
+            }
+            return present;
+        }
+
+        public static void Reset()
+        {
+            map = null;
+            tick = -1;
+        }
+    }
+
+    /// <summary>
+    /// List&lt;T&gt;._version: every mutating List method (Add, Insert, Remove*, Clear, the indexer setter, Sort, Reverse)
+    /// increments it, so (list reference, version) identifies the list's contents.
+    /// </summary>
+    public static class ListVersion<T>
+    {
+        private static readonly AccessTools.FieldRef<List<T>, int> version = AccessTools.FieldRefAccess<List<T>, int>("_version");
+
+        public static int Of(List<T> list) => version(list);
+    }
+}

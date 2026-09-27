@@ -1,0 +1,11 @@
+# Benchmark data (copies of saves), results and launch drafts stay local.
+bench/data/
+bench/results/
+launch/
+
+# Build output
+**/bin/
+**/obj/
+1.6/Assemblies/
+.vs/
+*.user
