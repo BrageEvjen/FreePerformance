@@ -90,7 +90,7 @@ namespace ParallelTick.Optimizations
         /// caravan or transport-pod members. The fast answers here are only used for spawned pawns, which are never world
         /// pawns, so it can't change them.
         /// </summary>
-        private static bool Accepts(HarmonyLib.Patch patch) =>
+        internal static bool Accepts(HarmonyLib.Patch patch) =>
             patch?.PatchMethod?.DeclaringType?.FullName == "Vehicles.Patch_WorldHandling" && patch.PatchMethod.Name == "SituationBoardedVehicle";
 
         /// <summary>Stays off if another mod patches the methods whose answers are assumed.</summary>

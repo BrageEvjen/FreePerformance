@@ -70,7 +70,7 @@ namespace ParallelTick.Optimizations
         private static void Patch(Harmony harmony)
         {
             harmony.Patch(AccessTools.Method(typeof(Pawn_HealthTracker), nameof(Pawn_HealthTracker.HealthTick)),
-                prefix: new HarmonyMethod(typeof(HealthPatch), nameof(HealthPatch.Prefix)),
+                prefix: new HarmonyMethod(typeof(HealthPatch), nameof(HealthPatch.Prefix)) { priority = Priority.Last },
                 postfix: new HarmonyMethod(typeof(HealthPatch), nameof(HealthPatch.Postfix)));
             tryGetEffecter = AccessTools.Method(typeof(HediffUtility), nameof(HediffUtility.TryGetComp), new[] { typeof(Hediff) })
                 ?.MakeGenericMethod(typeof(HediffComp_Effecter));
@@ -83,6 +83,9 @@ namespace ParallelTick.Optimizations
             plans.Clear();
             ticked = skipped = rebuilds = effecterSkips = 0;
             guardChecked = false;
+            // Which hediffs and comps tick as vanilla depends on other mods' patches, checked again for each game.
+            hediffKinds.Clear();
+            compKinds.Clear();
             Info.Stats.Reset();
         }
 
@@ -108,44 +111,31 @@ namespace ParallelTick.Optimizations
             if (guardChecked)
                 return guardBlocked;
             guardChecked = true;
-            // Another mod's postfix on HealthTick runs after the replicated body just as it runs after vanilla's (Harmony
-            // runs postfixes when a prefix skips the original), unless it asks whether the original ran. Prefixes,
-            // transpilers and finalizers could see or change the body itself.
-            var health = AccessTools.Method(typeof(Pawn_HealthTracker), nameof(Pawn_HealthTracker.HealthTick));
-            var healthInfo = Harmony.GetPatchInfo(health);
-            if (healthInfo != null)
+            guardBlocked = false;
+            if (Bench.BenchConfig.NoGuards)
+                return false;
+            // The prefix is the last one and replaces HealthTick's body with a copy: other mods' prefixes run before it
+            // and their postfixes and finalizers after it, as around vanilla's body. Their patches on a hediff's or
+            // comp's tick make those hediffs tick as vanilla (Classify).
+            var problem = PatchGuard.ReplacedBodyProblem(AccessTools.Method(typeof(Pawn_HealthTracker), nameof(Pawn_HealthTracker.HealthTick)),
+                AccessTools.Method(typeof(HealthPatch), nameof(HealthPatch.Prefix)));
+            if (problem != null)
             {
-                bool Foreign(Patch p) => p.owner != ParallelTickMod.Id && !PatchGuard.Harmless(p);
-                var blocking = healthInfo.Prefixes.Where(Foreign)
-                    .Concat(healthInfo.Transpilers.Where(Foreign))
-                    .Concat(healthInfo.Finalizers.Where(Foreign))
-                    .Concat(healthInfo.Postfixes.Where(p => Foreign(p) && p.PatchMethod.GetParameters().Any(a => a.Name == "__runOriginal")))
-                    .Select(p => p.owner).Distinct().ToList();
-                if (blocking.Count > 0)
-                {
-                    Info.LogBlocked($"Pawn_HealthTracker.HealthTick is patched by {string.Join(", ", blocking)}");
-                    guardBlocked = true;
-                }
-            }
-            var methods = new List<MethodBase>
-            {
-                AccessTools.Method(typeof(Hediff), nameof(Hediff.Tick)),
-                AccessTools.Method(typeof(Hediff), nameof(Hediff.PostTick)),
-                AccessTools.Method(typeof(HediffWithComps), nameof(HediffWithComps.PostTick)),
-                AccessTools.Method(typeof(HediffComp), nameof(HediffComp.CompPostTick)),
-                AccessTools.Method(typeof(HediffComp_TendDuration), nameof(HediffComp.CompPostTick)),
-                AccessTools.Method(typeof(HediffComp_Link), nameof(HediffComp.CompPostTick)),
-            };
-            foreach (var m in methods)
-            {
-                var owners = PatchGuard.ForeignOwners(m);
-                if (owners != null && owners.Count > 0)
-                {
-                    Info.LogBlocked($"{m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}");
-                    guardBlocked = true;
-                }
+                Info.LogBlocked(problem);
+                guardBlocked = true;
             }
             return guardBlocked;
+        }
+
+        /// <summary>True when another mod patches the method anywhere in the type's hierarchy (logged once per method).</summary>
+        private static bool PatchedByOthers(Type type, string method)
+        {
+            if (Bench.BenchConfig.NoGuards)
+                return false;
+            var patched = PatchGuard.PatchedInHierarchy(type, method);
+            foreach (var line in patched)
+                Info.LogPartlyVanilla(line);
+            return patched.Count > 0;
         }
 
         // ---- Classification ----
@@ -176,7 +166,8 @@ namespace ParallelTick.Optimizations
                 return kind;
             var tick = AccessTools.Method(type, nameof(Hediff.Tick))?.DeclaringType;
             var postTick = AccessTools.Method(type, nameof(Hediff.PostTick))?.DeclaringType;
-            kind = tick == typeof(Hediff) && (postTick == typeof(Hediff) || postTick == typeof(HediffWithComps)) ? Kind.Skip : Kind.Always;
+            var patched = PatchedByOthers(type, nameof(Hediff.Tick)) | PatchedByOthers(type, nameof(Hediff.PostTick));
+            kind = !patched && tick == typeof(Hediff) && (postTick == typeof(Hediff) || postTick == typeof(HediffWithComps)) ? Kind.Skip : Kind.Always;
             hediffKinds[type] = kind;
             return kind;
         }
@@ -187,7 +178,8 @@ namespace ParallelTick.Optimizations
             if (!compKinds.TryGetValue(type, out var kind))
             {
                 var declaring = AccessTools.Method(type, nameof(HediffComp.CompPostTick))?.DeclaringType;
-                kind = declaring == typeof(HediffComp) ? Kind.Skip
+                kind = PatchedByOthers(type, nameof(HediffComp.CompPostTick)) ? Kind.Always
+                    : declaring == typeof(HediffComp) ? Kind.Skip
                     : declaring == typeof(HediffComp_TendDuration) ? Kind.Tend
                     : declaring == typeof(HediffComp_Link) ? Kind.Link
                     : Kind.Always;
@@ -227,6 +219,8 @@ namespace ParallelTick.Optimizations
 
         public static class HealthPatch
         {
+            /// <summary>The last prefix: other mods' prefixes on HealthTick run first, as before vanilla's body.</summary>
+            [HarmonyPriority(Priority.Last)]
             public static bool Prefix(Pawn_HealthTracker __instance, out List<(Hediff h, float severity, int tend)> __state)
             {
                 __state = null;

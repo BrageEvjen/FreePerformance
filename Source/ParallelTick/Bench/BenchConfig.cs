@@ -39,6 +39,9 @@ namespace ParallelTick.Bench
         /// <summary>testcomp=inert|disrupt: a ticking comp on every pawn (see BenchTestComp).</summary>
         public static string TestComp = "";
 
+        /// <summary>testpatches=inert|disrupt: another mod's patches on what the idle-pawn skip reasons about (see BenchTestPatches).</summary>
+        public static string TestPatches = "";
+
         /// <summary>noguards=true (bench only): ignore the other-mod patch guards of Optimization.Guarded, to measure what they cost. Not exact.</summary>
         public static bool NoGuards;
 
@@ -91,6 +94,7 @@ namespace ParallelTick.Bench
                     case "saveas": SaveAs = value; break;
                     case "noguards": NoGuards = bool.Parse(value); break;
                     case "testcomp": TestComp = value.ToLowerInvariant(); break;
+                    case "testpatches": TestPatches = value.ToLowerInvariant(); break;
                     case "record": RecordFps = float.Parse(value, System.Globalization.CultureInfo.InvariantCulture); break;
                     case "warmup": WarmupTicks = int.Parse(value); break;
                     case "ticks": MeasureTicks = int.Parse(value); break;

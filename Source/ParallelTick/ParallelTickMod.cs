@@ -19,7 +19,10 @@ namespace ParallelTick
                 Log.Message($"[Free Performance] Loaded from {typeof(ParallelTickMod).Assembly.Location}");
             SaveCompat.Patch(Harmony);
             if (BenchConfig.Active)
+            {
                 BenchTestComp.Apply();
+                BenchTestPatches.Apply();
+            }
             if (!BenchConfig.Active)
             {
                 // Normal play: verified optimizations are always patched and switched on/off by the settings at runtime.

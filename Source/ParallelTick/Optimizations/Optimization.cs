@@ -74,6 +74,18 @@ namespace ParallelTick.Optimizations
             Log.Message($"[Free Performance] {Label?.Replace("  (exact)", "") ?? Key} stays off: {reason}.");
         }
 
+        /// <summary>Parts that run as vanilla in the current game because another mod patches them (the rest stays on); shown in the settings.</summary>
+        public readonly List<string> PartlyVanilla = new List<string>();
+
+        /// <summary>Records and logs a part of this optimization that runs as vanilla because another mod patches it.</summary>
+        public void LogPartlyVanilla(string what)
+        {
+            if (PartlyVanilla.Contains(what))
+                return;
+            PartlyVanilla.Add(what);
+            Log.Message($"[Free Performance] {Label?.Replace("  (exact)", "") ?? Key}: {what}.");
+        }
+
         /// <summary>True when another mod changes something this optimization relies on (see Guarded).</summary>
         public bool Blocked
         {
@@ -90,6 +102,7 @@ namespace ParallelTick.Optimizations
         {
             guardChecked = false;
             BlockedReason = null;
+            PartlyVanilla.Clear();
         }
 
         private void CheckGuard()

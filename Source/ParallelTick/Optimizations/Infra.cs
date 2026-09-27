@@ -48,6 +48,56 @@ namespace ParallelTick.Optimizations
                 .Where(o => !(known.Any(p => p.owner == o) && known.Where(p => p.owner == o).All(Ok)))
                 .Distinct().ToList();
         }
+
+        /// <summary>
+        /// For an optimization whose prefix replaces a method's body with an exact copy (and so skips the original): the
+        /// prefix is the last one (Priority.Last), so other mods' prefixes run before it just as they run before vanilla's
+        /// body, and one that skips the original skips it too (Harmony leaves out later prefixes that return bool once
+        /// one returned false); their postfixes and finalizers run after it as after vanilla's body. Returns why that
+        /// doesn't hold, or null: a transpiler (the copy wouldn't have its change), a prefix that runs after this one, or
+        /// a postfix or finalizer that asks whether the original ran.
+        /// </summary>
+        public static string ReplacedBodyProblem(System.Reflection.MethodBase original, System.Reflection.MethodInfo ourPrefix, Func<Patch, bool> accepts = null)
+        {
+            var info = Harmony.GetPatchInfo(original);
+            if (info == null)
+                return null;
+            var name = $"{original.DeclaringType?.Name}.{original.Name}";
+            bool Foreign(Patch p) => p.owner != ParallelTickMod.Id && !Harmless(p) && accepts?.Invoke(p) != true;
+            string Owners(IEnumerable<Patch> patches) => string.Join(", ", patches.Select(p => p.owner).Distinct());
+
+            var transpilers = info.Transpilers.Where(Foreign).ToList();
+            if (transpilers.Count > 0)
+                return $"{name} is rewritten by {Owners(transpilers)}";
+            var asking = info.Postfixes.Concat(info.Finalizers).Where(Foreign)
+                .Where(p => p.PatchMethod.GetParameters().Any(a => a.Name == "__runOriginal")).ToList();
+            if (asking.Count > 0)
+                return $"{name} has patches from {Owners(asking)} that ask whether it ran";
+            var sorted = PatchProcessor.GetSortedPatchMethods(original, info.Prefixes.ToArray());
+            int At(System.Reflection.MethodInfo m) => sorted.FindIndex(s => s.MethodHandle == m.MethodHandle);
+            var ours = At(ourPrefix);
+            var later = info.Prefixes.Where(Foreign).Where(p => At(p.PatchMethod) > ours).ToList();
+            if (ours < 0 || later.Count > 0)
+                return $"{name} has a prefix from {(later.Count > 0 ? Owners(later) : "another mod")} that runs after this one";
+            return null;
+        }
+
+        /// <summary>
+        /// Other mods patching the named method anywhere in the type's hierarchy (its own override or a base class's,
+        /// which the override may call), as "Type.Method (patched by owners)" lines; empty when none.
+        /// </summary>
+        public static List<string> PatchedInHierarchy(Type type, string method, Func<Patch, bool> accepts = null)
+        {
+            var found = new List<string>();
+            for (var t = type; t != null && t != typeof(object); t = t.BaseType)
+            {
+                var m = AccessTools.DeclaredMethod(t, method);
+                var owners = m == null ? null : ForeignOwners(m, accepts: accepts);
+                if (owners != null && owners.Count > 0)
+                    found.Add($"{t.Name}.{method} runs as vanilla (patched by {string.Join(", ", owners)})");
+            }
+            return found;
+        }
     }
 
     /// <summary>

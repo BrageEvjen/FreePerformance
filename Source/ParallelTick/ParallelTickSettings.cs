@@ -64,6 +64,15 @@ namespace ParallelTick
                     GUI.color = Color.white;
                     Text.Font = GameFont.Small;
                 }
+                else if (opt.PartlyVanilla.Count > 0)
+                {
+                    // On, with the parts another mod changes running as vanilla.
+                    Text.Font = GameFont.Tiny;
+                    GUI.color = Color.gray;
+                    list.Label("      On; another mod changes part of it, and that part runs as vanilla: " + string.Join("; ", opt.PartlyVanilla) + ".");
+                    GUI.color = Color.white;
+                    Text.Font = GameFont.Small;
+                }
                 if (on == opt.DefaultOn)
                     Settings.Overrides.Remove(opt.Key);
                 else
