@@ -23,7 +23,7 @@
 
 Every optimization gives exactly the same result as the unmodified game. The mod skips work that provably does nothing, or reuses answers that provably have not changed. Nothing is approximated, delayed or run on other threads.
 
-Measured in a real 29-colonist colony (day 722, 202 pawns, 5,700 buildings) at Superfast: about 23% more game speed, and about 15% more on top of Performance Optimizer with 50 other mods installed. Smaller or younger colonies gain less. The wealth recount stutter every ~80 game seconds is about a third shorter.
+Measured in a real 29-colonist colony (day 722, 202 pawns, 5,700 buildings) at Superfast: about 23% more game speed. With 50 other mods and Performance Optimizer installed, a tick takes about 8% less time on top of Performance Optimizer. Smaller or younger colonies gain less. The wealth recount stutter every ~80 game seconds is about a third shorter.
 
 What it does:
 - Pawns that stand still (sleeping, idle, working at a bench) skip the parts of their tick that cannot do anything in that state.
