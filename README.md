@@ -15,8 +15,9 @@ can't skew the comparison. Details and numbers are below.
 The code was written with AI (Claude). That is why every optimization is checked against vanilla's own code as described
 above, and why the source is open, so you can check it yourself.
 
-If another mod patches a method an optimization reasons about, that optimization switches itself off and logs a line
-starting with `[Free Performance]`. The mod writes nothing into save files.
+If another mod patches a method an optimization reasons about, the part it patches runs as vanilla (for the idle-pawn skip
+and the hediff plan) or that optimization switches itself off (the others), and a line starting with `[Free Performance]`
+names the mod. The mod writes nothing into save files.
 
 The project folder and assembly are still called `ParallelTick` (the original working name); the packageId is
 `brage.paralleltick`.
@@ -200,6 +201,46 @@ mods): `inert` only counts ticks; `disrupt` also staggers its pawn every 97 tick
 mismatches in 265,795 would-skip ticks of pawns with the comp, 3,387 of them with a change the skip relies on (rest
 verified as vanilla). Normal mode: 72.6% of pawn ticks skipped, 346k comp ticks run as vanilla, 4,310 vanilla fallbacks,
 no errors. 50 real mods (VEF's CompAbilities on pawns): 0 mismatches, skippable pawn ticks 61% -> 74.6%.
+
+**Other mods' patches: only that part runs as vanilla (1.0.3)**: until 1.0.2, another mod patching any method the
+idle-pawn skip reasons about switched the whole skip off, so heavily modded games lost most of the gain. Now each part is
+handled on its own (`PawnTimeDilation.Part`):
+- a patch on a part of `Pawn.Tick`'s head (path follower, verbs, roping, flight, native verbs, stances and what they
+  call), on `ThingWithComps.Tick`, or on a comp type's `CompTick` makes that part run for real on skipped ticks, exactly
+  where vanilla calls it. After a part ran for real, what the rest of the head's skip relies on is re-checked before the
+  next part is skipped (`Head`/`Rest`); if it no longer holds, the head runs exactly as vanilla from that step
+  (`VanillaHead`, which keeps vanilla's single `Spawned` check for roping, flight and native verbs).
+- a patch on `Suspended`, `IsWorldPawn`, `IsHiddenFromPlayer`, `BloodRainTick` or the effecter ticks makes the skip ask or
+  call them on every skipped tick, where vanilla does.
+- other mods' prefixes, postfixes and finalizers on `Pawn.Tick` itself are fine: the skip is now the last prefix
+  (`Priority.Last`), so their prefixes run before it just as before vanilla's body (one that skips the tick skips this
+  too, since Harmony leaves out later bool prefixes), and their postfixes run after it. Only a transpiler on `Pawn.Tick`, a
+  prefix that runs after this one, or a patch that reads `__runOriginal` still switches the skip off
+  (`PatchGuard.ReplacedBodyProblem`).
+
+The hediff plan works the same way: it is the last prefix on `HealthTick` (other mods' prefixes are fine), and hediff and
+hediff-comp types whose `Tick`, `PostTick` or `CompPostTick` another mod patches tick as vanilla. The settings list the
+parts that run as vanilla and which mod patches them.
+
+Verify mode takes the same decisions at the same points (`Verifier.HeadCheck`): a part the skip leaves out is checked as a
+no-op, a part that runs for real marks the head for a re-check, and the re-check decides whether what follows is still
+checked. Tested with `-TestPatches mode:group+group` (patches under another Harmony id; `disrupt` also staggers the pawn
+now and then from the patched parts, and sometimes skips the whole `Pawn.Tick` or `HealthTick`), four runs so that every
+part is both patched in one run and checked right after a patched part in another:
+- path follower, native verbs, `Pawn.Tick` prefix, `Suspended`, `IsWorldPawn`, egg layer comp: 0 mismatches, 140k
+  would-skip ticks (38%; the staggers keep many pawns busy, and mechs were left out in this run);
+- flight, `ThingWithComps.Tick`, hidden, blood rain, effecters, `HealthTick` prefix and postfix, tend comp: 0 mismatches
+  in dilation (302k would-skip ticks, 82.5%) and in the hediff plan (1.32M checks);
+- verbs, native verbs, stances and their handlers, `Pawn.Tick` prefix: 0 mismatches, 296k would-skip ticks (81%);
+- roping, `FullBodyBusy` (so path follower and stances run for real): 0 mismatches, 315k would-skip ticks (86%).
+
+In each run a few thousand ticks had a patched part change something the rest relies on; those ran the rest of the head
+as vanilla, and the part right after was not checked for them (e.g. 3,368 of 314,672 native-verb ticks after roping).
+
+Speed (bench A/B of all default optimizations, 20 pairs of 250 ticks, noisy PC): vanilla -13.3% +/- 2.7% (1.0.2: -14.0%,
+the same within noise; the extra checks cost nothing measurable); with another mod's (inert) patches on verbs and stances
+-10.2% +/- 2.8%, where 1.0.2 would have switched the pawn skip off; with every part patched and disrupting (the worst case)
+-2.5% +/- 7.2%, no errors, 63% of pawn ticks still skipped and 62,880 fallbacks to vanilla.
 
 **Known-harmless patches** (`PatchGuard.Harmless`, each read in the other mod's code): Performance Optimizer's "Faster
 GetComp methods replacement" (returns the same comp through a cache) and wind transpiler (returns early only when plant
