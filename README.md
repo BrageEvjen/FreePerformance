@@ -275,7 +275,8 @@ overrides it (`Verb_ShootCE` while aiming or with a bipod, `Verb_MarkForArtiller
 CE version or another mod's change to the method is not accepted), and counts a verb as idle only if its type doesn't
 override `VerbTickCE`. Verify with the Combat Extended list: 0 mismatches, `VerbsTick` checked as a no-op 325,606 times
 with CE's code in place, 89.1% of pawn ticks skippable. Bench A/B with the CE list: -8.1% +/- 3.6% (before: -8.5% +/-
-3.0%); the verbs part was a small cost, so the difference is within the noise.
+3.0%); the verbs part was a small cost, so the difference is within the noise. Final 1.0.4 build with the CE list, 3000 ticks, every
+optimization in verify mode: 0 mismatches in all 21, nothing switched off, 87.8% of pawn ticks skippable.
 
 **Save files**: the mod's game components are taken out of the component list while a game is saved and put back after
 (the game recreates missing ones on load), so a save written with the mod has no trace of it except the mod list in the

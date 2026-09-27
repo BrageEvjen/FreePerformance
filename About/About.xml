@@ -3,7 +3,7 @@
   <name>Free Performance</name>
   <author>brage</author>
   <packageId>brage.paralleltick</packageId>
-  <modVersion>1.0.3</modVersion>
+  <modVersion>1.0.4</modVersion>
   <url>https://github.com/BrageEvjen/FreePerformance</url>
   <supportedVersions>
     <li>1.6</li>
