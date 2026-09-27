@@ -195,6 +195,12 @@ runs exactly as vanilla (`VanillaAfterComps`, including the suspended branch). V
 `ThingWithComps.Tick` decides at the same point). Vanilla save: 0 mismatches, 89.7% of pawn ticks skippable; mechs with
 turret guns, shields and carriers now qualify too.
 
+Tested without the mods themselves with `-TestComp` (a ticking comp added to every pawn race, standing in for animation
+mods): `inert` only counts ticks; `disrupt` also staggers its pawn every 97 ticks. Verify mode with `disrupt`: 0
+mismatches in 265,795 would-skip ticks of pawns with the comp, 3,387 of them with a change the skip relies on (rest
+verified as vanilla). Normal mode: 72.6% of pawn ticks skipped, 346k comp ticks run as vanilla, 4,310 vanilla fallbacks,
+no errors. 50 real mods (VEF's CompAbilities on pawns): 0 mismatches, skippable pawn ticks 61% -> 74.6%.
+
 **Known-harmless patches** (`PatchGuard.Harmless`, each read in the other mod's code): Performance Optimizer's "Faster
 GetComp methods replacement" (returns the same comp through a cache) and Minify Everything's `ThingOwner.DoTick` prefix
 (only skips ticking minified things' contents). The settings window shows, under each optimization, why it is off in the

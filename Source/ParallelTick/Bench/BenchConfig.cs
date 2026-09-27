@@ -36,6 +36,9 @@ namespace ParallelTick.Bench
         /// <summary>Play mode: frames per second to save as JPGs for comparison videos (0 = off); see FrameRecorder.</summary>
         public static float RecordFps;
 
+        /// <summary>testcomp=inert|disrupt: a ticking comp on every pawn (see BenchTestComp).</summary>
+        public static string TestComp = "";
+
         /// <summary>mode=portrait: portrait.&lt;key&gt;=value lines (see PortraitComponent).</summary>
         public static readonly Dictionary<string, string> Portrait = new Dictionary<string, string>();
         public static int WarmupTicks = 2500;
@@ -83,6 +86,7 @@ namespace ParallelTick.Bench
                     case "playab": PlayAb = value.ToLowerInvariant(); break;
                     case "playabseconds": PlayAbSeconds = int.Parse(value); break;
                     case "saveas": SaveAs = value; break;
+                    case "testcomp": TestComp = value.ToLowerInvariant(); break;
                     case "record": RecordFps = float.Parse(value, System.Globalization.CultureInfo.InvariantCulture); break;
                     case "warmup": WarmupTicks = int.Parse(value); break;
                     case "ticks": MeasureTicks = int.Parse(value); break;

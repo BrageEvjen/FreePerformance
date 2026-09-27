@@ -73,7 +73,7 @@ namespace ParallelTick.Optimizations
         private static readonly Dictionary<Pawn, DilState> states = new Dictionary<Pawn, DilState>(RefEq<Pawn>.Instance);
         private static readonly Dictionary<Type, CompKind?> compKinds = new Dictionary<Type, CompKind?>();
         private static readonly Dictionary<string, long> forced = new Dictionary<string, long>();
-        private static long offTicks, sleepOffTicks, fullTicks, qualified, movingOffTicks, remainderFallbacks, foreignCompTicks, foreignFallbacks;
+        private static long offTicks, sleepOffTicks, fullTicks, qualified, movingOffTicks, remainderFallbacks, foreignCompTicks, foreignFallbacks, foreignPawnOffTicks, verifyForeignChanged;
         private static readonly Dictionary<string, long> foreignTypes = new Dictionary<string, long>();
         private static readonly long[] offByCategory = new long[4], fullByCategory = new long[4];
         private static readonly string[] CategoryNames = { "animals", "humanlikes", "mechs", "other" };
@@ -121,7 +121,7 @@ namespace ParallelTick.Optimizations
             states.Clear();
             forced.Clear();
             blockers.Clear();
-            offTicks = sleepOffTicks = fullTicks = qualified = movingOffTicks = remainderFallbacks = foreignCompTicks = foreignFallbacks = 0;
+            offTicks = sleepOffTicks = fullTicks = qualified = movingOffTicks = remainderFallbacks = foreignCompTicks = foreignFallbacks = foreignPawnOffTicks = verifyForeignChanged = 0;
             foreignTypes.Clear();
             Array.Clear(offByCategory, 0, 4);
             Array.Clear(fullByCategory, 0, 4);
@@ -145,6 +145,8 @@ namespace ParallelTick.Optimizations
             yield return $"  of which moving (real PatherTick): {movingOffTicks:N0}, rest of the head run as vanilla after moving: {remainderFallbacks:N0}";
             yield return $"  full-tick qualifications: {qualified:N0}";
             yield return $"  comps from other mods ticked as in vanilla on skipped ticks: {foreignCompTicks:N0}, rest of the tick run as vanilla after them: {foreignFallbacks:N0}";
+            yield return $"  {(Info.Mode == OptMode.Verify ? "would-skip" : "skipped")} ticks of pawns with such comps: {foreignPawnOffTicks:N0}" +
+                         (Info.Mode == OptMode.Verify ? $", of which a comp changed something the skip relies on (rest verified as vanilla): {verifyForeignChanged:N0}" : "");
             foreach (var kv in foreignTypes.OrderByDescending(kv => kv.Value).Take(10))
                 yield return $"  pawns qualified with comp {kv.Key}: {kv.Value:N0}";
             for (var c = 0; c < 4; c++)
@@ -243,6 +245,8 @@ namespace ParallelTick.Optimizations
                     return true;
                 offByCategory[s.Category]++;
                 offTicks++;
+                if (s.HasForeign)
+                    foreignPawnOffTicks++;
                 if (__instance.jobs?.curDriver?.asleep == true)
                     sleepOffTicks++;
                 if (Info.Verifying)
@@ -1001,6 +1005,8 @@ namespace ParallelTick.Optimizations
                 var list = currentState.CompList;
                 restSkippable = thingComps(current) == list && ListVersion<ThingComp>.Of(list) == compListVersion &&
                                 IdleAfterComps(current, currentState);
+                if (!restSkippable)
+                    verifyForeignChanged++;
                 patherPredictedIdle = PatherIdle(current.pather);
             }
 

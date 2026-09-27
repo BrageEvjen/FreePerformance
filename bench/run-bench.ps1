@@ -41,6 +41,8 @@ param(
     [double]$Record = 0,
     # Portrait mode: "key=value|key=value" (see PortraitComponent), e.g. "hairs=ShortCut,Recruit|heads=Male_AverageWide".
     [string]$Portrait = "",
+    # A ticking comp on every pawn race (inert | disrupt), standing in for animation mods; see BenchTestComp.
+    [string]$TestComp = "",
     [int]$ABBlock = 250,
     [string]$Label = "run",
     [string[]]$ExtraMods = @(),
@@ -118,6 +120,7 @@ tickbudget=$TickBudget
 playab=$PlayAB
 playabseconds=$PlayABSeconds
 saveas=$SaveAs
+testcomp=$TestComp
 record=$([string]::Format([Globalization.CultureInfo]::InvariantCulture, "{0}", $Record))
 warmup=$Warmup
 ticks=$Ticks
