@@ -35,7 +35,12 @@ namespace ParallelTick.Optimizations
                 AccessTools.Method(typeof(WorkGiver_ConstructDeliverResources), "ShouldRemoveExistingFloorFirst"),
                 AccessTools.Method(typeof(GenConstruct), nameof(GenConstruct.FirstBlockingThing)),
             }.Concat(AccessTools.GetDeclaredMethods(typeof(GenConstruct))
-                .Where(m => m.Name == nameof(GenConstruct.CanGetResources_NewTemp) || m.Name == nameof(GenConstruct.CanConstruct))),
+                .Where(m => m.Name == nameof(GenConstruct.CanGetResources_NewTemp))),
+            // GenConstruct.CanConstruct is not guarded: in the state where the early "no job" applies, vanilla returns false
+            // whatever it answers (false right away, or false after the resources check), so patches to it (Replace
+            // Stuff, VEF) can't change the result. VEF's prefix on work givers' HasJobOnThing only ever answers "no job"
+            // (construction skill work types) and has no side effects, so it can't turn this "no job" into a job either.
+            Accepts = p => p?.PatchMethod?.DeclaringType?.FullName == "VEF.Pawns.Workgiver_Patches",
             Reset = () => Info.Stats.Reset(),
         };
 

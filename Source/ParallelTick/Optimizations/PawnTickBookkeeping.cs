@@ -85,6 +85,14 @@ namespace ParallelTick.Optimizations
 
         private static bool guardChecked, guardBlocked;
 
+        /// <summary>
+        /// Vehicle Framework's postfix on WorldPawns.GetSituation (read in its source) only turns "Free" world pawns into
+        /// caravan or transport-pod members. The fast answers here are only used for spawned pawns, which are never world
+        /// pawns, so it can't change them.
+        /// </summary>
+        private static bool Accepts(HarmonyLib.Patch patch) =>
+            patch?.PatchMethod?.DeclaringType?.FullName == "Vehicles.Patch_WorldHandling" && patch.PatchMethod.Name == "SituationBoardedVehicle";
+
         /// <summary>Stays off if another mod patches the methods whose answers are assumed.</summary>
         private static bool Blocked()
         {
@@ -105,7 +113,7 @@ namespace ParallelTick.Optimizations
                          AccessTools.PropertyGetter(typeof(Gene), nameof(Gene.Active)),
                      })
             {
-                var owners = PatchGuard.ForeignOwners(m);
+                var owners = PatchGuard.ForeignOwners(m, accepts: Accepts);
                 if (owners != null && owners.Count > 0)
                 {
                     Info.LogBlocked($"{m.DeclaringType?.Name}.{m.Name} is patched by {string.Join(", ", owners)}");
