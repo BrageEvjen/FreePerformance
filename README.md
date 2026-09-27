@@ -268,6 +268,15 @@ mismatches in all 21 with either combat mod. The idle-pawn skip applies to 88.6%
 (18 of 20 pairs; off 20.0 ms, on 18.4 ms per tick; vanilla save -13.3%, off 17.2 ms), so the mods add about 3 ms per tick
 of their own and the mod still takes 1.7 ms off.
 
+Combat Extended's transpiler on `VerbTracker.VerbsTick` (read from the running game with `-DumpIl`) only adds, after each
+verb's `VerbTick`, a call to `VerbTickCE` for `Verb_LaunchProjectileCE` verbs; that method is empty unless a subclass
+overrides it (`Verb_ShootCE` while aiming or with a bipod, `Verb_MarkForArtillery`). The idle-pawn skip now accepts it
+(`CeVerbs`) when `VerbsTick`'s current code is exactly vanilla's loop plus that call (checked once at startup, so a changed
+CE version or another mod's change to the method is not accepted), and counts a verb as idle only if its type doesn't
+override `VerbTickCE`. Verify with the Combat Extended list: 0 mismatches, `VerbsTick` checked as a no-op 325,606 times
+with CE's code in place, 89.1% of pawn ticks skippable. Bench A/B with the CE list: -8.1% +/- 3.6% (before: -8.5% +/-
+3.0%); the verbs part was a small cost, so the difference is within the noise.
+
 **Save files**: the mod's game components are taken out of the component list while a game is saved and put back after
 (the game recreates missing ones on load), so a save written with the mod has no trace of it except the mod list in the
 header. It can be added to or removed from a running save. Checked with `-SaveAs` (saves at the end of a run).

@@ -131,6 +131,7 @@ namespace ParallelTick.Optimizations
             guardChecked = false;
             healthTickForeign = false;
             foreignParts = Part.None;
+            ceVerbs = false;
             Verifier.Reset();
             Info.Stats.Reset();
         }
@@ -245,9 +246,13 @@ namespace ParallelTick.Optimizations
 
         /// <summary>
         /// Vehicle Framework's postfix on WorldPawns.GetSituation only changes the answer for world pawns (see
-        /// PawnTickBookkeeping), never for the spawned pawns skipped here.
+        /// PawnTickBookkeeping), never for the spawned pawns skipped here. Combat Extended's VerbsTick transpiler only adds
+        /// VerbTickCE for its projectile verbs (see CeVerbs); verbs whose type overrides that are then never idle.
         /// </summary>
-        private static bool Accepts(HarmonyLib.Patch patch) => PawnTickBookkeeping.Accepts(patch);
+        private static bool Accepts(HarmonyLib.Patch patch) => PawnTickBookkeeping.Accepts(patch) || CeVerbs.Accepts(patch);
+
+        /// <summary>Combat Extended's VerbsTick change is accepted: VerbsIdle also checks CeVerbs.Quiet.</summary>
+        private static bool ceVerbs;
 
         /// <summary>Checked on first use, so mods that patch after this one are seen too. True when the skip can't be used at all.</summary>
         private static bool Blocked()
@@ -258,6 +263,7 @@ namespace ParallelTick.Optimizations
             guardBlocked = false;
             foreignParts = Part.None;
             healthTickForeign = false;
+            ceVerbs = false;
             if (Bench.BenchConfig.NoGuards)
                 return false;
             try
@@ -280,6 +286,8 @@ namespace ParallelTick.Optimizations
                     foreignParts |= part;
                     Info.LogPartlyVanilla($"{method.DeclaringType?.Name}.{method.Name} runs as vanilla (patched by {string.Join(", ", owners)})");
                 }
+                ceVerbs = Harmony.GetPatchInfo(AccessTools.Method(typeof(VerbTracker), nameof(VerbTracker.VerbsTick)))?.Transpilers
+                    .Any(p => CeVerbs.IsCePatch(p) && CeVerbs.Accepts(p)) == true;
                 if (Has(Part.Comps))
                     baseTick = AccessTools.MethodDelegate<Action<ThingWithComps>>(AccessTools.Method(typeof(ThingWithComps), "Tick"), null, false, null);
                 var healthOwners = PatchGuard.ForeignOwners(AccessTools.Method(typeof(Pawn_HealthTracker), nameof(Pawn_HealthTracker.HealthTick)));
@@ -505,7 +513,7 @@ namespace ParallelTick.Optimizations
             for (var i = 0; i < verbs.Count; i++)
             {
                 var v = verbs[i];
-                if (v.state == VerbState.Bursting || maintainedEffecters(v)?.Count > 0)
+                if (v.state == VerbState.Bursting || maintainedEffecters(v)?.Count > 0 || ceVerbs && !CeVerbs.Quiet(v))
                     return false;
             }
             return true;
