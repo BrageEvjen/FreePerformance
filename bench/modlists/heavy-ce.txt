@@ -1,0 +1,1 @@
+OskarPotocki.VanillaFactionsExpanded.Core,erdelf.HumanoidAlienRaces,RedMattis.BetterPrerequisites,CETeam.CombatExtended,Nals.FacialAnimation,co.uk.epicguru.meleeanimation,Dubwise.DubsBadHygiene,Mehni.PickUpAndHaul,avilmask.CommonSense,sarg.alphaanimals,Solaris.RatkinRaceMod,VanillaExpanded.VPsycastsE
