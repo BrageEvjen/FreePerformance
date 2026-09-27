@@ -278,6 +278,12 @@ with CE's code in place, 89.1% of pawn ticks skippable. Bench A/B with the CE li
 3.0%); the verbs part was a small cost, so the difference is within the noise. Final 1.0.4 build with the CE list, 3000 ticks, every
 optimization in verify mode: 0 mismatches in all 21, nothing switched off, 87.8% of pawn ticks skippable.
 
+Real play with the 1.0.4 build (Superfast with rendering, all optimizations switched on and off every 10 s, 10 minutes,
+same night, ~1.3 cores of background load): the CE list 53.3 -> 60.6 TPS, +13.6% +/- 5.0% (24 of 29 pairs); vanilla
+49.4 -> 56.1 TPS, +13.7% +/- 6.0% (26 of 29). Heavily modded games now gain as much as vanilla (1.0.2 with the 50-mod list:
++2.1% +/- 6.7%). Both are lower than the earlier +23% (80 -> 99 TPS): the PC ran this save much slower that night, and
+with ~11 FPS rendering takes a larger share of each frame.
+
 **Save files**: the mod's game components are taken out of the component list while a game is saved and put back after
 (the game recreates missing ones on load), so a save written with the mod has no trace of it except the mod list in the
 header. It can be added to or removed from a running save. Checked with `-SaveAs` (saves at the end of a run).
