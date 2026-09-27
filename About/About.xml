@@ -41,5 +41,7 @@ Compatibility:
 - If another mod changes a method an optimization depends on, that optimization switches itself off and says so in the log.
 - Saves no data into your save file, so you can add or remove it at any time.
 
-Each optimization can be switched off under Options > Mod settings.</description>
+Each optimization can be switched off under Options > Mod settings.
+
+The code was written with AI (Claude). Everything is verified against vanilla's own code, and the source is open: https://github.com/BrageEvjen/FreePerformance</description>
 </ModMetaData>

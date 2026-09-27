@@ -12,6 +12,9 @@ in the same process and counts differences. All of them show 0 differences, also
 measured by switching the optimizations on and off every few seconds in the same session, so background load on the PC
 can't skew the comparison. Details and numbers are below.
 
+The code was written with AI (Claude). That is why every optimization is checked against vanilla's own code as described
+above, and why the source is open, so you can check it yourself.
+
 If another mod patches a method an optimization reasons about, that optimization switches itself off and logs a line
 starting with `[Free Performance]`. The mod writes nothing into save files.
 
