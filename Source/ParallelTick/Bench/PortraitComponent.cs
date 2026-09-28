@@ -35,7 +35,7 @@ namespace ParallelTick.Bench
                 return;
             started = true;
             Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
-            Find.CameraDriver.StartCoroutine(Guarded(Render()));
+            Find.CameraDriver.StartCoroutine(Guarded(Get("scene", "") != "" ? Scene() : Render()));
         }
 
         /// <summary>Runs the render coroutine; if it throws, writes the error as the result and quits instead of hanging.</summary>
@@ -67,6 +67,52 @@ namespace ParallelTick.Bench
             var p = Get(key, fallback).Split(',').Select(x => float.Parse(x.Trim(), CultureInfo.InvariantCulture)).ToArray();
             return new Color(p[0], p[1], p[2]);
         }
+
+        /// <summary>
+        /// portrait.scene=sleep: screenshots of the loaded colony as the game draws it (UI hidden), centred on colonists
+        /// asleep in bed (or portrait.pawn=Name), for the Workshop image. Keys: camsize (camera zoom, default 7), count
+        /// (how many pawns, default 4), supersize (screenshot scale, default 2), offsetx / offsetz (camera shift in cells).
+        /// </summary>
+        private static IEnumerator Scene()
+        {
+            var dir = Path.Combine(Path.GetDirectoryName(BenchConfig.ResultPath) ?? ".", "portraits");
+            Directory.CreateDirectory(dir);
+            foreach (var old in Directory.GetFiles(dir))
+                File.Delete(old);
+            var log = new List<string>();
+            var map = Find.CurrentMap;
+            var name = Get("pawn", "");
+            var pawns = name != ""
+                ? map.mapPawns.AllPawnsSpawned.Where(p => p.LabelShort == name).ToList()
+                : map.mapPawns.FreeColonistsSpawned.Where(p => p.InBed() && !p.Awake()).ToList();
+            foreach (var p in map.mapPawns.FreeColonistsSpawned)
+                log.Add($"colonist {p.LabelShort} at {p.Position}: job {p.CurJobDef?.defName}, in bed {p.InBed()}, awake {p.Awake()}");
+            var camSize = float.Parse(Get("camsize", "7"), CultureInfo.InvariantCulture);
+            var superSize = int.Parse(Get("supersize", "2"));
+            var offset = new Vector3(float.Parse(Get("offsetx", "0"), CultureInfo.InvariantCulture), 0f,
+                float.Parse(Get("offsetz", "0"), CultureInfo.InvariantCulture));
+            Find.ScreenshotModeHandler.Active = true;
+            // Name and bed labels are GUI overlays that screenshot mode keeps; hide them for the capture.
+            if (Get("labels", "off") == "off")
+                ParallelTickMod.Harmony.Patch(HarmonyLib.AccessTools.Method(typeof(ThingOverlays), nameof(ThingOverlays.ThingOverlaysOnGUI)),
+                    prefix: new HarmonyLib.HarmonyMethod(typeof(PortraitComponent), nameof(NoOverlays)));
+            foreach (var pawn in pawns.Take(int.Parse(Get("count", "4"))))
+            {
+                Find.CameraDriver.SetRootPosAndSize(pawn.DrawPos + offset, camSize);
+                for (var i = 0; i < 20; i++)
+                    yield return null;
+                yield return new WaitForEndOfFrame();
+                var tex = ScreenCapture.CaptureScreenshotAsTexture(superSize);
+                var file = Path.Combine(dir, $"scene_{pawn.LabelShort}.png");
+                File.WriteAllBytes(file, tex.EncodeToPNG());
+                log.Add($"saved {file} ({tex.width}x{tex.height})");
+                UnityEngine.Object.Destroy(tex);
+            }
+            File.WriteAllText(BenchConfig.ResultPath, "Scene render\n" + string.Join("\n", log) + "\n");
+            Root.Shutdown();
+        }
+
+        public static bool NoOverlays() => false;
 
         private static IEnumerator Render()
         {
