@@ -1,7 +1,8 @@
 from PIL import Image, ImageDraw, ImageFont
 import os, sys
 
-SRC = r"E:RimWorldModsParallelTickbenchdataportraitsscene_Creak.png"  # from: run-bench.ps1 -Portrait "scene=sleep|camsize=4|count=4|supersize=4"
+# Screenshot from: run-bench.ps1 -Portrait "scene=sleep|camsize=4|count=4|supersize=4"
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "portraits", "scene_Creak.png")
 OUT = sys.argv[1] if len(sys.argv) > 1 else "preview.png"
 W, H = 1280, 720
 
