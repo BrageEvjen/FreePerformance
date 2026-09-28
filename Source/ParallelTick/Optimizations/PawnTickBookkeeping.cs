@@ -9,7 +9,7 @@ using Verse;
 namespace ParallelTick.Optimizations
 {
     /// <summary>
-    /// Pawn.Tick and Pawn.TickInterval do some bookkeeping for every pawn, every time, that has a fixed answer for pawns
+    /// Pawn.Tick, Pawn.TickInterval and (every frame) Pawn.ProcessPostTickVisuals do some bookkeeping for every pawn, every time, that has a fixed answer for pawns
     /// standing on a map:
     /// - Suspended and IsWorldPawn look the pawn up in the world-pawn sets (3 hash lookups each). A spawned pawn is never
     ///   a world pawn: Pawn.SpawnSetup removes it from WorldPawns and WorldPawns.PassToWorld refuses spawned pawns. So
@@ -45,6 +45,8 @@ namespace ParallelTick.Optimizations
             var transpiler = new HarmonyMethod(typeof(PawnTickBookkeeping), nameof(Transpiler));
             harmony.Patch(AccessTools.Method(typeof(Pawn), "Tick"), transpiler: transpiler);
             harmony.Patch(AccessTools.Method(typeof(Pawn), "TickInterval"), transpiler: transpiler);
+            // Every frame, for every spawned pawn (visual updates after ticking): the same Suspended lookup.
+            harmony.Patch(AccessTools.Method(typeof(Pawn), nameof(Pawn.ProcessPostTickVisuals)), transpiler: transpiler);
         }
 
         private static void Reset()
@@ -71,7 +73,7 @@ namespace ParallelTick.Optimizations
                 ins.Calls(isWorldPawn) ? nameof(FastIsWorldPawn) :
                 ins.Calls(bloodRain) ? nameof(FastBloodRainTick) :
                 ins.Calls(geneTick) ? nameof(FastGeneTrackerTick) : null;
-            var expected = __originalMethod.Name == "Tick" ? 5 : 2;
+            var expected = __originalMethod.Name == "Tick" ? 5 : __originalMethod.Name == "TickInterval" ? 2 : 1;
             return SafeTranspile.Replace(instructions, expected, $"Pawn bookkeeping shortcut (Pawn.{__originalMethod.Name})",
                 ins => Helper(ins) != null,
                 ins =>
