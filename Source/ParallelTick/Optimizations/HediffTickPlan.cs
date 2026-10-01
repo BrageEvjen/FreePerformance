@@ -217,6 +217,24 @@ namespace ParallelTick.Optimizations
 
         // ---- HealthTick ----
 
+        /// <summary>
+        /// Vanilla runs; remember what the plan says it would not tick, and check afterwards it did not change. Its own
+        /// method so the lambdas in it don't make the compiler allocate a closure on every call of the prefix.
+        /// </summary>
+        private static List<(Hediff h, float severity, int tend)> VerifyBefore(Pawn pawn, List<Hediff> list, Plan plan)
+        {
+            Info.Stats.Checks++;
+            var active = new HashSet<Hediff>(plan.Entries.Where(e => ConditionActive(e)).Select(e => e.Hediff));
+            var state = new List<(Hediff, float, int)>();
+            foreach (var h in list)
+                if (!active.Contains(h))
+                    state.Add((h, severityInt(h), (h as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>()?.tendTicksLeft ?? 0));
+            var fresh = list.Select(Classify).Where(e => e.Kind != Kind.Skip).ToArray();
+            if (fresh.Length != plan.Entries.Length || fresh.Where((e, i) => e.Hediff != plan.Entries[i].Hediff || e.Kind != plan.Entries[i].Kind).Any())
+                Info.Stats.Mismatch(() => $"{pawn}: cached hediff plan differs from a fresh one");
+            return state;
+        }
+
         public static class HealthPatch
         {
             /// <summary>The last prefix: other mods' prefixes on HealthTick run first, as before vanilla's body.</summary>
@@ -234,16 +252,7 @@ namespace ParallelTick.Optimizations
 
                 if (Info.Verifying)
                 {
-                    // Vanilla runs; remember what the plan says it would not tick, and check afterwards it did not change.
-                    Info.Stats.Checks++;
-                    var active = new HashSet<Hediff>(plan.Entries.Where(e => ConditionActive(e)).Select(e => e.Hediff));
-                    __state = new List<(Hediff, float, int)>();
-                    foreach (var h in list)
-                        if (!active.Contains(h))
-                            __state.Add((h, severityInt(h), (h as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>()?.tendTicksLeft ?? 0));
-                    var fresh = list.Select(Classify).Where(e => e.Kind != Kind.Skip).ToArray();
-                    if (fresh.Length != plan.Entries.Length || fresh.Where((e, i) => e.Hediff != plan.Entries[i].Hediff || e.Kind != plan.Entries[i].Kind).Any())
-                        Info.Stats.Mismatch(() => $"{pawn}: cached hediff plan differs from a fresh one");
+                    __state = VerifyBefore(pawn, list, plan);
                     return true;
                 }
 
@@ -342,11 +351,13 @@ namespace ParallelTick.Optimizations
                 var vanilla = h.TryGetComp<HediffComp_Effecter>();
                 Info.Stats.Checks++;
                 if (vanilla != null)
-                    Info.Stats.Mismatch(() => $"{h}: has an effecter comp its def does not list");
+                    MismatchEffecter(h);
                 return vanilla;
             }
             effecterSkips++;
             return null;
         }
+
+        private static void MismatchEffecter(Hediff h) => Info.Stats.Mismatch(() => $"{h}: has an effecter comp its def does not list");
     }
 }

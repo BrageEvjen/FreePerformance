@@ -136,12 +136,18 @@ namespace ParallelTick.Optimizations
                 var vanilla = t.Suspended;
                 Info.Stats.Checks++;
                 if (vanilla)
-                    Info.Stats.Mismatch(() => $"{t}: spawned but Suspended");
+                    Mismatch(t, "spawned but Suspended");
                 return vanilla;
             }
             suspendedHits++;
             return false;
         }
+
+        /// <summary>
+        /// The lambda lives here, not in the callers: a lambda capturing a parameter makes the compiler allocate a closure
+        /// on entry to the method holding it, and these callers run for every pawn every tick.
+        /// </summary>
+        private static void Mismatch(object what, string problem) => Info.Stats.Mismatch(() => $"{what}: {problem}");
 
         public static bool FastIsWorldPawn(Pawn p)
         {
@@ -152,7 +158,7 @@ namespace ParallelTick.Optimizations
                 var vanilla = WorldPawnsUtility.IsWorldPawn(p);
                 Info.Stats.Checks++;
                 if (vanilla)
-                    Info.Stats.Mismatch(() => $"{p}: spawned but a world pawn");
+                    Mismatch(p, "spawned but a world pawn");
                 return vanilla;
             }
             worldPawnHits++;
@@ -171,10 +177,10 @@ namespace ParallelTick.Optimizations
                 var hediffs = p.health.hediffSet.hediffs.Count;
                 Info.Stats.Checks++;
                 if (BloodRainUtility.ExposedToBloodRain(p))
-                    Info.Stats.Mismatch(() => $"{p}: exposed to blood rain without a blood rain condition");
+                    Mismatch(p, "exposed to blood rain without a blood rain condition");
                 BloodRainUtility.BloodRainTick(p);
                 if (p.health.hediffSet.hediffs.Count != hediffs)
-                    Info.Stats.Mismatch(() => $"{p}: blood rain tick changed hediffs");
+                    Mismatch(p, "blood rain tick changed hediffs");
                 return;
             }
             bloodRainSkips++;

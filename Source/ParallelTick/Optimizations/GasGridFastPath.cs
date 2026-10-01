@@ -106,7 +106,7 @@ namespace ParallelTick.Optimizations
                     tryDissipate(__instance, idx);
                 }
                 else if (verifying)
-                    CheckNoOp(__instance, idx, () => tryDissipate(__instance, idx), "dissipation");
+                    CheckNoOp(__instance, idx, default, false, "dissipation");
                 else
                     skippedCalls++;
                 cycleIndexDissipation(__instance)++;
@@ -125,7 +125,7 @@ namespace ParallelTick.Optimizations
                     tryDiffuse(__instance, cell);
                 }
                 else if (verifying)
-                    CheckNoOp(__instance, CellIndicesUtility.CellToIndex(cell, sizeX), () => tryDiffuse(__instance, cell), "diffusion");
+                    CheckNoOp(__instance, CellIndicesUtility.CellToIndex(cell, sizeX), cell, true, "diffusion");
                 else
                     skippedCalls++;
                 cycleIndexDiffusion(__instance)++;
@@ -136,8 +136,12 @@ namespace ParallelTick.Optimizations
             return false;
         }
 
-        /// <summary>Verify: make the vanilla call for a cell predicted to be a no-op and check nothing changed.</summary>
-        private static void CheckNoOp(GasGrid grid, int idx, System.Action call, string what)
+        /// <summary>
+        /// Verify: make the vanilla call for a cell predicted to be a no-op and check nothing changed. Takes the call as
+        /// arguments, not a lambda: a lambda capturing the loop's variables would allocate a closure for every cell visited,
+        /// also when not verifying.
+        /// </summary>
+        private static void CheckNoOp(GasGrid grid, int idx, IntVec3 cell, bool diffuse, string what)
         {
             // Both calls only write the cell itself and its 4 neighbours.
             var density = gasDensity(grid);
@@ -145,7 +149,10 @@ namespace ParallelTick.Optimizations
             var around = new[] { idx, idx - 1, idx + 1, idx - sizeX, idx + sizeX };
             var before = around.Select(i => i >= 0 && i < density.Length ? density[i] : 0u).ToArray();
             var rand = randIterations.GetValue(null);
-            call();
+            if (diffuse)
+                tryDiffuse(grid, cell);
+            else
+                tryDissipate(grid, idx);
             Info.Stats.Checks++;
             if (!Equals(randIterations.GetValue(null), rand))
                 Info.Stats.Mismatch(() => $"{what} at cell {idx}: used the random number generator");
