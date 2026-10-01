@@ -55,6 +55,7 @@ working copy also holds `bench/data` (copies of saves), results and source. So n
 - `Source/ParallelTick/` – C# source (`dotnet build -c Release` writes the DLL into `1.6/Assemblies`)
 - `bench/run-bench.ps1` – runs a benchmark on a copy of a save
 - `bench/make-release.ps1` – builds the clean Workshop folder (see above)
+- `bench/check-allocations.ps1` – fails if the optimizations allocate far more garbage than vanilla (see Stutter)
 - `bench/results/` – one text file per benchmark run (not in the repository)
 - `tools/Inspect/` – lists types, methods and call graphs in the game's `Assembly-CSharp.dll`
 
@@ -78,6 +79,11 @@ Diagnostics (all optional):
   `bench\compare-randtrace.ps1 a.randtrace.txt b.randtrace.txt`
 - `-DumpFrom <tick> -DumpTo <tick>` – every thing's state for those ticks; compare with
   `bench\compare-dump.ps1 a.dump.txt b.dump.txt`
+- `-AB <key> -Ticks 10000` – in-process A/B of one optimization (or `all`, `defaults`, `a+b+c` with `-Opt` for the
+  rest); reports time and allocation per tick, off against on
+- `-AB "ablate:Verse.AI.JobDriver.DriverTick"` – skips a void method in the "on" blocks, so the difference is its true
+  cost without profiler timers; `...?asleep` (JobDriver methods only) skips it for sleeping pawns' drivers only.
+  The game misbehaves meanwhile; for measuring only
 
 ## Findings so far (Teroum save, Ryzen 5 2600X)
 
@@ -319,7 +325,40 @@ and ~18 ms for colonists in the instrumented run, with material delivery to blue
 averaging ~17 ms per search. Searches that find nothing are cheap (~0.3–1 ms). Other spike sources: occasional mood
 recalculations with an expensive stat, and rare expensive job fail conditions.
 
-GC is not a source of spikes: ~23 KB allocated per tick, 0 collections in 5000 ticks (Unity incremental GC is on).
+Garbage collection: vanilla allocates ~11–13 KB per tick and had 0–1 collections in 5000 ticks (Unity incremental GC is
+on), so it is not a source of spikes. **1.0.5 was**: with every optimization on it allocated 88–99 KB per tick, 5–7
+collections in 5000 ticks of ~15 ms each. The cause was verify-only lambdas inside methods that run thousands of times
+per tick (`GasGridFastPath.Prefix` in its per-cell loop, `PawnTickBookkeeping.FastSuspended`/`FastIsWorldPawn`/
+`FastBloodRainTick`, `HediffTickPlan` prefix and `FastEffecter`): a lambda that captures a variable makes the compiler
+allocate a closure on entry to the scope that declares it, whether or not the lambda ever runs. In 1.0.6 the lambdas
+live in their own methods. Bisected by running groups of optimizations alone (gas grid 81.7 → 11.7 KB/tick, hediff plan
+34.8 → 11.7, pawn bookkeeping 26.2 → 12.4); all three still show 0 mismatches in verify mode.
+
+With every optimization on, 1.0.6 allocates 13–29 KB per tick and has 0–2 collections in 5000 ticks. That spread is the
+game, not the mod: even the off blocks of one in-process A/B vary 14–25 KB between runs, and the A/B finds no added
+allocation (all optimizations, 20 pairs of 250 ticks: on −9.3 KB/tick ± 7.9 against off). So `check-allocations.ps1`
+compares vanilla with all-on across launches with a wide threshold (default 40 KB/tick: 1.0.5 was +76 to +87, 1.0.6 at
+most +17) and catches a leak of that size. For a smaller one use the A/B, which is blind only to allocations made in
+both the on and off blocks (a closure at the entry of a patched method).
+
+## What is left (1.0.6, same save, 20-thread PC, all optimizations on)
+
+True costs measured with `-AB "ablate:..."` (20 pairs of 250 ticks, noisy PC with 2–2.4 cores of other load; paired, so
+the drift cancels):
+
+- Skipping every `JobDriver.DriverTick`: 3.27 → 2.39 ms/tick, **−27%** (±5%).
+- Skipping it only for sleeping pawns' drivers (`?asleep`): 3.40 → 2.71 ms/tick, **−20%** (±6%). This is an upper bound
+  for an exact skip of what a sleeping pawn's job tick does (about 108 pawns per tick on this save).
+- The breakdown's "Job fail/end conditions" (16% of the instrumented tick) is mostly the profiler itself: its timer
+  evaluates every condition delegate again and reads the closure's fields by reflection. Don't take it as a target.
+
+## Compatibility report
+
+Options → Mod settings → Free Performance → "Copy compatibility report to clipboard" copies, as text: the mod and game
+versions, for each optimization whether it is on, off (and because of which mod's patch) or partly vanilla, and the active
+mod list in load order. Nothing is sent anywhere. In the main menu the "partly vanilla" lines are still empty (they are
+found when a game first uses an optimization), so ask for the report from a running game. The same text is appended to
+every benchmark result.
 
 ## Reading the report
 

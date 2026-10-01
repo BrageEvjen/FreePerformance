@@ -40,6 +40,7 @@ namespace ParallelTick
 
         private Vector2 scroll;
         private float contentHeight = 1000f;
+        private float copiedUntil;
 
         public override void DoSettingsWindowContents(Rect inRect)
         {
@@ -50,6 +51,15 @@ namespace ParallelTick
             list.Begin(view);
             list.Label("Each optimization gives the same result as vanilla: it is checked against vanilla and timed in-game " +
                        "before it is added here. All are on by default.");
+            list.Gap(6f);
+            var buttonRect = list.GetRect(30f);
+            if (Widgets.ButtonText(buttonRect, Time.realtimeSinceStartup < copiedUntil ? "Copied" : "Copy compatibility report to clipboard"))
+            {
+                GUIUtility.systemCopyBuffer = CompatReport.Build();
+                copiedUntil = Time.realtimeSinceStartup + 3f;
+            }
+            TooltipHandler.TipRegion(buttonRect, "Which optimizations are on or off here and why, and your mod list, as text to " +
+                                                  "paste into a bug report. Nothing is sent anywhere.");
             list.GapLine();
             foreach (var opt in OptimizationRegistry.All)
             {

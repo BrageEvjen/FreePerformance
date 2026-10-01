@@ -179,7 +179,7 @@ Write-Host ("Game exited after {0:N0} s" -f $elapsed)
 if ((Get-Item $link -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { cmd /c rmdir "$link" | Out-Null }
 # Which copy of the mod did the game load? (The Workshop copy has the same packageId.)
 $loadedFrom = Select-String -Path $log -Pattern "\[Free Performance\] Loaded from (.*)" | Select-Object -First 1
-if ($loadedFrom -and $loadedFrom.Matches[0].Groups[1].Value -notlike "*$(Split-Path $root -Leaf)*") {
+if ($loadedFrom -and $loadedFrom.Matches[0].Groups[1].Value -notlike "*\Mods\$(Split-Path $link -Leaf)\*") {
     Write-Host "WARNING: the game loaded another copy of the mod: $($loadedFrom.Matches[0].Groups[1].Value)"
 }
 

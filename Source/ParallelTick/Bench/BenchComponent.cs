@@ -41,6 +41,8 @@ namespace ParallelTick.Bench
         private readonly List<string> trace = new List<string>();
         private readonly List<double> gcTickMs = new List<double>();
         private long allocatedBytes;
+        /// <summary>KB allocated by each measured tick (NaN when a collection ran during it), in tick order like measureMs.</summary>
+        private readonly List<double> allocKb = new List<double>();
         private readonly List<double> measureMs = new List<double>();
         private readonly List<double> breakdownMs = new List<double>();
         private readonly Stopwatch wall = new Stopwatch();
@@ -195,9 +197,16 @@ namespace ParallelTick.Bench
                 {
                     // Heap growth during a tick is its allocation, unless a collection ran inside the tick.
                     if (GC.CollectionCount(0) != gcBefore)
+                    {
                         gcTickMs.Add(ms);
+                        allocKb.Add(double.NaN);
+                    }
                     else
-                        allocatedBytes += Math.Max(0, Profiler.GetMonoUsedSizeLong() - heapBefore);
+                    {
+                        var grown = Math.Max(0, Profiler.GetMonoUsedSizeLong() - heapBefore);
+                        allocatedBytes += grown;
+                        allocKb.Add(grown / 1024.0);
+                    }
                 }
                 if (tracing && tm.TicksGame % BenchConfig.TraceInterval == 0)
                     trace.Add($"{tm.TicksGame} {StateHash.Compute()}");
@@ -282,7 +291,41 @@ namespace ParallelTick.Bench
             sb.AppendLine($"on mean:          {offMean + d:F3} ms");
             sb.AppendLine($"difference:       {d:+0.000;-0.000} ms ({100 * d / offMean:+0.0;-0.0}%), 95% CI +/-{1.96 * se:F3} ms (+/-{100 * 1.96 * se / offMean:F1}%)");
             sb.AppendLine($"on faster in:     {diffs.Count(x => x < 0)} of {diffs.Count} pairs");
+
+            var allocOff = new List<double>();
+            var allocDiffs = new List<double>();
+            for (var k = 0; k + 1 < blockMeans.Count; k += 2)
+            {
+                var off = BlockAllocKb(k * block, block);
+                var on = BlockAllocKb((k + 1) * block, block);
+                if (double.IsNaN(off) || double.IsNaN(on))
+                    continue;
+                allocOff.Add(off);
+                allocDiffs.Add(on - off);
+            }
+            if (allocDiffs.Count >= 2)
+            {
+                var ad = allocDiffs.Average();
+                var asd = Math.Sqrt(allocDiffs.Sum(x => (x - ad) * (x - ad)) / (allocDiffs.Count - 1));
+                var ase = asd / Math.Sqrt(allocDiffs.Count);
+                sb.AppendLine($"allocation:       off {allocOff.Average():F1} KB/tick, on {allocOff.Average() + ad:F1} KB/tick, " +
+                              $"difference {ad:+0.0;-0.0} KB/tick (95% CI +/-{1.96 * ase:F1}), {allocDiffs.Count} pairs without a collection");
+            }
             sb.AppendLine();
+        }
+
+        private double BlockAllocKb(int start, int count)
+        {
+            var sum = 0.0;
+            var n = 0;
+            for (var i = start; i < start + count && i < allocKb.Count; i++)
+            {
+                if (double.IsNaN(allocKb[i]))
+                    continue;
+                sum += allocKb[i];
+                n++;
+            }
+            return n < count / 2 ? double.NaN : sum / n;
         }
 
         private static readonly Func<WealthWatcher, float> WealthItemsOf =
@@ -495,6 +538,10 @@ namespace ParallelTick.Bench
             sb.AppendLine($"hash at warmup start: {hashAtWarmupStart}");
             sb.AppendLine($"hash at measure end:  {hashAtMeasureEnd}");
             AppendWealthRecount(sb);
+
+            sb.AppendLine();
+            sb.AppendLine("== Compatibility report (what the settings button copies)");
+            sb.Append(CompatReport.Build());
 
             if (breakdownMs.Count > 0)
             {
