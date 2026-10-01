@@ -52,6 +52,7 @@ working copy also holds `bench/data` (copies of saves), results and source. So n
 ## Layout
 
 - `About/`, `1.6/Assemblies/` – the RimWorld mod (linked into the game's `Mods` folder as a junction)
+- `workshop/` – extra pictures for the Workshop page (added by hand under Edit > Add / Edit Images & Videos); the main picture is `About/Preview.png`
 - `Source/ParallelTick/` – C# source (`dotnet build -c Release` writes the DLL into `1.6/Assemblies`)
 - `bench/run-bench.ps1` – runs a benchmark on a copy of a save
 - `bench/make-release.ps1` – builds the clean Workshop folder (see above)
