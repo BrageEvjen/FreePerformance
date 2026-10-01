@@ -35,7 +35,10 @@ if (Get-Process RimWorldWin64 -ErrorAction SilentlyContinue) { throw "Close RimW
 
 Push-Location (Join-Path $root "Source\ParallelTick")
 try {
-    dotnet build -c Release | Select-String -Pattern "error|Build succeeded" | ForEach-Object { $_.Line }
+    # The csproj defaults point at E:\SteamLibrary; derive the game and Harmony folders from -GameDir so any Steam library works.
+    $steamApps = Split-Path (Split-Path $GameDir -Parent) -Parent
+    $harmonyDir = Join-Path $steamApps "workshop\content\294100\2009463077\Current\Assemblies"
+    dotnet build -c Release "-p:RimWorldDir=$GameDir" "-p:HarmonyDir=$harmonyDir" | Select-String -Pattern "error|Build succeeded" | ForEach-Object { $_.Line }
     if ($LASTEXITCODE -ne 0) { throw "Build failed." }
 } finally { Pop-Location }
 
